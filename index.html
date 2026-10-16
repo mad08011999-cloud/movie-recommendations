@@ -1,0 +1,78 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Poojith's Movie Recommendations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#16161a;--soft:#5d5d66;--line:#e2e0da;--acc:#e5484d;--ok:#2f9e5b;--mid:#d18a00;--sh:0 2px 10px rgba(0,0,0,.06)}
+[data-theme=dark]{--bg:#0f1014;--card:#1a1b21;--ink:#ecebf0;--soft:#9b9aa6;--line:#2b2c35;--sh:0 2px 12px rgba(0,0,0,.4)}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:1280px;margin:auto;padding:24px 18px 60px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:clamp(24px,4vw,38px);font-weight:800}h1 span{color:var(--acc)}
+.sub{color:var(--soft);margin:4px 0 0}
+button,select,input{font:inherit;color:inherit}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 14px;cursor:pointer}
+.btn:hover{border-color:var(--acc)}.btn.acc{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:18px;box-shadow:var(--sh)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.f{display:flex;flex-direction:column;gap:4px;flex:1;min-width:150px}
+label{font-size:12px;font-weight:600;color:var(--soft);text-transform:uppercase;letter-spacing:.04em}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%}
+.ai input{font-size:16px}.hint{font-size:13px;color:var(--soft);margin:6px 0 0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.chip{border:1px solid var(--line);border-radius:99px;padding:5px 11px;font-size:13px;cursor:pointer;background:var(--bg)}
+.chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.tabs{display:flex;gap:6px;margin-top:18px;flex-wrap:wrap}.tab{padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:var(--card);cursor:pointer;font-weight:600}
+.tab.on{background:var(--ink);color:var(--bg)}
+.meta{display:flex;justify-content:space-between;align-items:center;color:var(--soft);margin:14px 0;font-size:14px;flex-wrap:wrap;gap:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--sh)}
+.poster{aspect-ratio:2/3;background:var(--line) center/cover;position:relative}
+.poster .ph{position:absolute;inset:0;display:grid;place-items:center;padding:10px;text-align:center;font-weight:800;color:var(--soft)}
+.badge{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.7);color:#fff;font-size:11px;padding:3px 7px;border-radius:6px;text-transform:uppercase;font-weight:600}
+.rt{left:auto;right:8px;background:#f5c518;color:#000}
+.body{padding:11px;display:flex;flex-direction:column;gap:6px;flex:1}
+.t{font-weight:700;line-height:1.25}.s{font-size:12px;color:var(--soft)}
+.d{font-size:12.5px;color:var(--soft);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}.d.open{-webkit-line-clamp:unset}
+.why{font-size:11.5px;color:var(--acc)}
+.st{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-top:auto}
+.st button{flex:1;border:0;background:none;padding:7px 2px;font-size:12px;cursor:pointer;color:var(--soft)}
+.st button+button{border-left:1px solid var(--line)}
+.st button.on[data-s=todo]{background:#e5484d22;color:var(--acc)}.st button.on[data-s=watching]{background:#d18a0022;color:var(--mid)}.st button.on[data-s=watched]{background:#2f9e5b22;color:var(--ok);font-weight:700}
+.empty{text-align:center;padding:50px;color:var(--soft);border:1px dashed var(--line);border-radius:14px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:560px;width:94%}
+dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none}.toast.show{opacity:1}
+</style></head><body><div class="wrap">
+<header><div><h1>Poojith's Watchlist<span>.</span></h1><p class="sub">From the <b>Movie Recommendations</b> collection — <b id="cnt"></b></p></div>
+<div class="row"><button class="btn" id="themeBtn">🌓 Theme</button><button class="btn" id="setBtn">⚙️ Settings &amp; sync</button></div></header>
+
+<section class="panel ai"><label for="vibe">✨ AI search — describe a gist or vibe</label>
+<div class="row" style="margin-top:6px"><div class="f" style="flex:5"><input id="vibe" placeholder="e.g. feel-good underdog sports story, or a slow-burn heist with a twist"></div><button class="btn acc" id="vibeBtn">Find matches</button><button class="btn" id="vibeClr">Clear</button></div>
+<p class="hint" id="aiMode"></p>
+<div class="chips" id="ex"></div></section>
+
+<section class="panel"><div class="row">
+<div class="f" style="flex:2"><label for="q">Search</label><input id="q" type="search" placeholder="Title, actor, keyword…"></div>
+<div class="f"><label for="type">Type</label><select id="type"><option value="all">All</option><option value="movie">Movies</option><option value="series">Series</option></select></div>
+<div class="f"><label for="lang">Language</label><select id="lang"><option value="all">All languages</option></select></div>
+<div class="f"><label>Years</label><div class="row" style="flex-wrap:nowrap"><input id="y1" type="number"><input id="y2" type="number"></div></div>
+<div class="f"><label for="sort">Sort</label><select id="sort"><option value="saves">Most saved</option><option value="rating">Highest rated</option><option value="new">Newest</option><option value="old">Oldest</option><option value="az">Title A–Z</option></select></div>
+</div>
+<label style="display:block;margin-top:12px">Genres</label><div class="chips" id="genres"></div></section>
+
+<div class="tabs" id="tabs"></div>
+<div class="meta"><span id="info"></span><button class="btn" id="reset">Reset filters</button></div>
+<div class="grid" id="grid"></div><div style="text-align:center;margin-top:24px"><button class="btn" id="more">Show more</button></div>
+</div>
+
+<dialog id="dlg"><h2 style="margin-top:0">Settings &amp; sync</h2>
+<h3>🤖 AI model (optional)</h3><p class="hint">Without a key, AI search uses smart on-device matching. With a key, an LLM re-ranks the matches. Keys are kept only in this browser (localStorage) and sent only to the provider you enter.</p>
+<div class="f"><label>API base URL (OpenAI-compatible)</label><input id="aiBase" placeholder="https://api.openai.com/v1"></div>
+<div class="f"><label>Model</label><input id="aiModel" placeholder="gpt-4o-mini"></div>
+<div class="f"><label>API key</label><input id="aiKey" type="password" placeholder="sk-…"></div>
+<h3>☁️ Sync watched list to GitHub (optional)</h3><p class="hint">Status is always saved in this browser. To sync across devices, paste a fine-grained GitHub token with <i>Contents: read &amp; write</i> on this repo only. It saves <code>watched.json</code> in the repo.</p>
+<div class="f"><label>Repo (owner/name)</label><input id="ghRepo"></div>
+<div class="f"><label>GitHub token</label><input id="ghTok" type="password" placeholder="github_pat_…"></div>
+<div class="row"><button class="btn" id="pull">⬇ Pull from GitHub</button><button class="btn" id="push">⬆ Push to GitHub</button></div>
+<h3>💾 Backup</h3><div class="row"><button class="btn" id="exp">Export JSON</button><button class="btn" id="impB">Import JSON</button><input type="file" id="imp" accept=".json" hidden></div>
+<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn acc" id="save">Save &amp; close</button></div></dialog>
+<div class="toast" id="toast"></div>
+<script src="app.js"></script></body></html>

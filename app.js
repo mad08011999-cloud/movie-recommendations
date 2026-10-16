@@ -1,0 +1,127 @@
+(async function(){
+"use strict";
+const $=s=>document.querySelector(s), LS=k=>localStorage.getItem(k), SET=(k,v)=>localStorage.setItem(k,v);
+const DEF_REPO="mad08011999-cloud/movie-recommendations";
+const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2600)};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const T=await (await fetch("catalog.json")).json();
+T.forEach(t=>{t.genres=t.genres||[];t.language=t.language||"Unknown";t.blob=(t.title+" "+t.genres.join(" ")+" "+t.desc+" "+t.type+" "+t.language).toLowerCase()});
+const BY=Object.fromEntries(T.map(t=>[t.id,t]));
+// theme
+const theme=LS("theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+document.documentElement.dataset.theme=theme;
+$("#themeBtn").onclick=()=>{const n=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=n;SET("theme",n)};
+// status
+let ST=JSON.parse(LS("status")||"{}");
+const saveST=()=>{SET("status",JSON.stringify(ST));autoPush()};
+const stOf=id=>ST[id]?.status||"none";
+// filters
+const years=T.map(t=>t.year).filter(Boolean),YMIN=Math.min(...years),YMAX=Math.max(...years);
+const langs=[...new Set(T.map(t=>t.language))].sort((a,b)=>T.filter(t=>t.language===b).length-T.filter(t=>t.language===a).length);
+langs.forEach(l=>$("#lang").insertAdjacentHTML("beforeend",`<option>${esc(l)}</option>`));
+const gc={};T.forEach(t=>t.genres.forEach(g=>gc[g]=(gc[g]||0)+1));
+const GEN=Object.keys(gc).sort((a,b)=>gc[b]-gc[a]);
+const selG=new Set();
+$("#genres").innerHTML=GEN.map(g=>`<span class="chip" data-g="${esc(g)}">${esc(g)} <small>${gc[g]}</small></span>`).join("");
+$("#genres").onclick=e=>{const c=e.target.closest(".chip");if(!c)return;const g=c.dataset.g;selG.has(g)?selG.delete(g):selG.add(g);c.classList.toggle("on");page=1;render()};
+$("#y1").min=$("#y2").min=YMIN;$("#y1").max=$("#y2").max=YMAX;$("#y1").value=YMIN;$("#y2").value=YMAX;
+let tab="all",page=1,vibe=null; const PER=48;
+const TABS=[["all","All"],["todo","To watch"],["watching","Watching"],["watched","✅ Watched"]];
+function tabs(){$("#tabs").innerHTML=TABS.map(([k,n])=>`<span class="tab ${tab===k?"on":""}" data-t="${k}">${n} (${k==="all"?T.length:T.filter(t=>stOf(t.id)===k).length})</span>`).join("")}
+$("#tabs").onclick=e=>{const c=e.target.closest(".tab");if(c){tab=c.dataset.t;page=1;render()}};
+["q","type","lang","y1","y2","sort"].forEach(id=>$("#"+id).addEventListener("input",()=>{page=1;render()}));
+$("#reset").onclick=()=>{$("#q").value="";$("#type").value="all";$("#lang").value="all";$("#y1").value=YMIN;$("#y2").value=YMAX;selG.clear();document.querySelectorAll("#genres .chip").forEach(c=>c.classList.remove("on"));clearVibe();};
+$("#more").onclick=()=>{page++;render()};
+// ---- vibe search (local) ----
+const SYN={funny:["comedy","hilarious","humor","comic","laugh"],comedy:["funny","humor","comic"],scary:["horror","terrifying","haunted","supernatural","creepy"],horror:["scary","haunted","ghost","demon"],romantic:["romance","love","relationship"],romance:["love","romantic"],love:["romance","romantic","relationship"],"feel-good":["comedy","heartwarming","uplifting","family","friendship"],feelgood:["comedy","heartwarming","uplifting"],uplifting:["inspiring","heartwarming","triumph"],sad:["drama","tragic","grief","loss","death"],emotional:["drama","grief","family","tearjerker"],dark:["crime","thriller","murder","violent","psychological"],thriller:["suspense","mystery","crime","tense"],suspense:["thriller","mystery"],twist:["mystery","thriller","secret","revealed"],mindbending:["sci-fi","psychological","mystery","reality"],"mind-bending":["sci-fi","psychological","mystery","reality"],action:["fight","battle","chase","mission"],heist:["robbery","thief","steal","crime","con"],space:["sci-fi","astronaut","planet","alien"],future:["sci-fi","dystopian","technology"],scifi:["sci-fi","science"],"sci-fi":["science","future","alien","space"],kids:["family","animation","animated","children"],family:["kids","children","father","mother"],animated:["animation"],cartoon:["animation"],anime:["animation","japanese"],sports:["sport","team","coach","championship","football","boxing","cricket"],sport:["sports","team","coach"],underdog:["sport","team","coach","overcome"],true:["biography","based","real","history"],biopic:["biography","life"],war:["soldier","army","battle","history"],history:["historical","war","period"],music:["musical","band","singer","song"],detective:["mystery","crime","investigation","murder"],murder:["crime","killer","detective"],killer:["serial","murder","thriller"],school:["teen","high","college","student"],teen:["high","school","coming-of-age","young"],college:["university","student"],friends:["friendship","friend"],road:["trip","journey"],adventure:["journey","quest","adventure"],magic:["fantasy","wizard","witch"],fantasy:["magic","myth","kingdom"],superhero:["marvel","dc","comic","powers","action"],courtroom:["lawyer","trial","court","legal"],wedding:["marriage","romance","bride"],relaxing:["comedy","light","family"],light:["comedy","romance"],cozy:["comedy","family","romance"],binge:["series"],show:["series"],series:["series"],movie:["movie"],film:["movie"],bollywood:["hindi"],tollywood:["telugu"],korean:["korean"],kdrama:["korean","series"],indian:["hindi","telugu","tamil","malayalam","kannada"],time:["time","travel"],travel:["journey","trip"],zombie:["undead","horror","apocalypse"],alien:["sci-fi","extraterrestrial"],robot:["ai","sci-fi","android"],revenge:["vengeance","avenge","crime"],spy:["espionage","agent","cia","secret"],gangster:["mafia","crime","mob"],politics:["political","president","government"]};
+const STOP=new Set("a an the and or of to in on with for about that this is are be some something like want watch me my i show movie film where who which very really kind sort any".split(" "));
+const stem=w=>w.replace(/(ing|ies|es|s|ed)$/,"");
+function localRank(q){
+  const words=q.toLowerCase().match(/[a-z0-9\-]+/g)||[];const terms=new Map();
+  words.forEach(w=>{if(STOP.has(w))return;terms.set(w,3);(SYN[w]||SYN[stem(w)]||[]).forEach(s=>{if(!terms.has(s))terms.set(s,1.5)})});
+  const wantType=/\b(series|show|shows|tv|binge|kdrama)\b/.test(q)?"series":/\b(movie|movies|film|films)\b/.test(q)?"movie":null;
+  const res=[];
+  T.forEach(t=>{let sc=0,hit=[];const gl=t.genres.map(g=>g.toLowerCase());
+    terms.forEach((wt,term)=>{const st=stem(term);
+      if(gl.some(g=>g===term||g===st||stem(g)===st)){sc+=wt*2.5;hit.push(term)}
+      else if(t.title.toLowerCase().includes(term)){sc+=wt*1.5;hit.push(term)}
+      else if(st.length>2&&new RegExp("\\b"+st.replace(/[-]/g,"\\-")).test(t.blob)){sc+=wt;hit.push(term)}
+      else if(term===t.language.toLowerCase()){sc+=wt*2;hit.push(term)}});
+    if(wantType&&t.type!==wantType)sc*=.3;
+    if(sc>0){sc+=(t.rating||5)*.15+Math.log1p(t.saves||0)*.1;res.push({id:t.id,sc,why:[...new Set(hit)].slice(0,4).join(", ")})}});
+  return res.sort((a,b)=>b.sc-a.sc);
+}
+const ai=()=>({base:(LS("aiBase")||"https://api.openai.com/v1").replace(/\/$/,""),model:LS("aiModel")||"gpt-4o-mini",key:LS("aiKey")||""});
+const aiNote=()=>$("#aiMode").textContent=ai().key?`AI mode: ${ai().model} re-ranks on-device matches (key stored only in this browser).`:"On-device smart matching (genres, plots, mood synonyms). Add your own LLM API key in Settings for true AI ranking.";
+aiNote();
+async function llmRank(q,cands){
+  const {base,model,key}=ai();
+  const list=cands.map(c=>{const t=BY[c.id];return `${t.id}|${t.title} (${t.year},${t.type},${t.language})|${t.genres.join("/")}|${t.desc.slice(0,160)}`}).join("\n");
+  const r=await fetch(base+"/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+key},
+    body:JSON.stringify({model,temperature:0.2,messages:[{role:"system",content:"You pick movies/series that best match a user's described vibe. Only choose from the provided list. Reply with JSON only: {\"picks\":[{\"id\":\"tt...\",\"why\":\"short reason\"}]} with up to 30 picks, best first."},{role:"user",content:`Vibe: ${q}\n\nCatalog (id|title|genres|plot):\n${list}`}]})});
+  if(!r.ok)throw new Error("AI "+r.status);
+  const j=await r.json();const txt=j.choices[0].message.content;const m=JSON.parse(txt.slice(txt.indexOf("{"),txt.lastIndexOf("}")+1));
+  return m.picks.filter(p=>BY[p.id]).map((p,i)=>({id:p.id,sc:1000-i,why:"🤖 "+p.why}));
+}
+async function runVibe(){
+  const q=$("#vibe").value.trim();if(!q)return clearVibe();
+  let res=localRank(q);
+  if(ai().key){
+    $("#vibeBtn").textContent="Thinking…";
+    try{let pool=res.slice(0,120);if(pool.length<40)pool=pool.concat(T.filter(t=>!pool.some(p=>p.id===t.id)).sort((a,b)=>(b.saves||0)-(a.saves||0)).slice(0,120-pool.length).map(t=>({id:t.id})));res=await llmRank(q,pool)}
+    catch(e){toast("AI failed ("+e.message+"), used on-device matching")}
+    $("#vibeBtn").textContent="Find matches";
+  }
+  vibe={q,res:res.slice(0,60)};page=1;render();
+  if(!res.length)toast("No matches — try different words");
+}
+function clearVibe(){vibe=null;$("#vibe").value="";page=1;render()}
+$("#vibeBtn").onclick=runVibe;$("#vibe").onkeydown=e=>{if(e.key==="Enter")runVibe()};$("#vibeClr").onclick=clearVibe;
+const EX=["feel-good underdog sports story","dark psychological thriller with a twist","light romantic comedy for a cozy night","mind-bending sci-fi","bingeable crime series","Indian family drama"];
+$("#ex").innerHTML=EX.map(e=>`<span class="chip">${e}</span>`).join("");
+$("#ex").onclick=e=>{if(e.target.classList.contains("chip")){$("#vibe").value=e.target.textContent;runVibe()}};
+// ---- render ----
+function filtered(){
+  const q=$("#q").value.trim().toLowerCase(),ty=$("#type").value,lg=$("#lang").value,y1=+$("#y1").value||0,y2=+$("#y2").value||9999;
+  let list=vibe?vibe.res.map(r=>Object.assign({},BY[r.id],{why:r.why})):T.slice();
+  list=list.filter(t=>(!q||t.blob.includes(q))&&(ty==="all"||t.type===ty)&&(lg==="all"||t.language===lg)&&(!t.year||(t.year>=y1&&t.year<=y2))&&[...selG].every(g=>t.genres.includes(g))&&(tab==="all"||stOf(t.id)===tab));
+  if(!vibe){const s=$("#sort").value,f={saves:(a,b)=>(b.saves||0)-(a.saves||0),rating:(a,b)=>(b.rating||0)-(a.rating||0),new:(a,b)=>(b.year||0)-(a.year||0),old:(a,b)=>(a.year||9999)-(b.year||9999),az:(a,b)=>a.title.localeCompare(b.title)}[s];list.sort(f)}
+  return list;
+}
+function card(t){const s=stOf(t.id);
+  return `<article class="card" data-id="${t.id}"><div class="poster" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}<span class="badge">${t.type}</span>${t.rating?`<span class="badge rt">★ ${t.rating}</span>`:""}</div>
+  <div class="body"><div class="t">${esc(t.title)}</div><div class="s">${t.year||"—"} · ${esc(t.language)} · ${esc(t.genres.join(", "))}</div>
+  ${t.why?`<div class="why">Matched: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
+  <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div></div></article>`}
+function render(){tabs();const list=filtered();
+  $("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;
+  $("#info").textContent=(vibe?`Vibe matches for “${vibe.q}”: `:"")+`${list.length} title${list.length===1?"":"s"}`;
+  $("#grid").innerHTML=list.length?list.slice(0,page*PER).map(card).join(""):`<div class="empty" style="grid-column:1/-1"><b>Nothing here</b><br>Try loosening the filters.</div>`;
+  $("#more").style.display=list.length>page*PER?"":"none";
+}
+$("#grid").onclick=e=>{const b=e.target.closest(".st button");if(b){const id=b.closest(".card").dataset.id,s=b.dataset.s;
+    if(stOf(id)===s)delete ST[id];else ST[id]={status:s,title:BY[id].title,updatedAt:new Date().toISOString()};
+    saveST();render();if(s==="watched"&&ST[id])toast(`“${BY[id].title}” added to Watched`);return}
+  const d=e.target.closest(".d");if(d)d.classList.toggle("open")};
+// ---- settings / sync ----
+const gh=()=>({repo:LS("ghRepo")||DEF_REPO,tok:LS("ghTok")||""});
+$("#setBtn").onclick=()=>{const a=ai(),g=gh();$("#aiBase").value=LS("aiBase")||"";$("#aiModel").value=LS("aiModel")||"";$("#aiKey").value=a.key;$("#ghRepo").value=g.repo;$("#ghTok").value=g.tok;$("#dlg").showModal()};
+$("#save").onclick=()=>{["aiBase","aiModel","aiKey","ghRepo","ghTok"].forEach(k=>{const v=$("#"+k).value.trim();v?SET(k,v):localStorage.removeItem(k)});aiNote();$("#dlg").close();toast("Settings saved in this browser")};
+const b64=s=>btoa(unescape(encodeURIComponent(s))),unb64=s=>decodeURIComponent(escape(atob(s.replace(/\n/g,""))));
+async function ghGet(){const {repo,tok}=gh();const h=tok?{Authorization:"Bearer "+tok}:{};
+  const r=await fetch(`https://api.github.com/repos/${repo}/contents/watched.json?t=${Date.now()}`,{headers:h,cache:"no-store"});if(r.status===404)return{sha:null,data:{items:{}}};if(!r.ok)throw new Error(r.status);const j=await r.json();return{sha:j.sha,data:JSON.parse(unb64(j.content))}}
+function merge(remote){let n=0;Object.entries(remote.items||{}).forEach(([id,v])=>{if(!BY[id])return;const l=ST[id];if(!l||(v.updatedAt||"")>(l.updatedAt||"")){ST[id]=v;n++}});SET("status",JSON.stringify(ST));return n}
+async function pull(silent){try{const {data}=await ghGet();const n=merge(data);render();if(!silent)toast(`Pulled from GitHub (${n} updated)`)}catch(e){if(!silent)toast("Pull failed: "+e.message)}}
+async function push(){const {repo,tok}=gh();if(!tok)return toast("Add a GitHub token in Settings first");
+  try{const {sha,data}=await ghGet();merge(data);
+    const watched=Object.entries(ST).filter(([,v])=>v.status==="watched").map(([id,v])=>({id,title:v.title,watchedAt:v.updatedAt}));
+    const body={updated:new Date().toISOString(),watched,items:ST};
+    const r=await fetch(`https://api.github.com/repos/${repo}/contents/watched.json`,{method:"PUT",headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},body:JSON.stringify({message:"Update watched list",content:b64(JSON.stringify(body,null,1)),...(sha?{sha}:{})})});
+    if(!r.ok)throw new Error(r.status);toast("Synced to GitHub ✓")}catch(e){toast("Push failed: "+e.message)}}
+let pt;function autoPush(){if(gh().tok){clearTimeout(pt);pt=setTimeout(push,2500)}}
+$("#pull").onclick=()=>pull(false);$("#push").onclick=push;
+$("#exp").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({exported:new Date().toISOString(),items:ST},null,1)],{type:"application/json"}));a.download="watchlist-status.json";a.click()};
+$("#impB").onclick=()=>$("#imp").click();
+$("#imp").onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());const n=merge(j.items?j:{items:j});render();toast(`Imported ${n} entries`)}catch(x){toast("Invalid file")}};
+render();pull(true);
+})();
