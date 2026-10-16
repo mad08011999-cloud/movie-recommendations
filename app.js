@@ -128,12 +128,57 @@ async function load(){sync("⏳ Loading…");const{data,error}=await sb.from("wa
   Object.entries(remote).forEach(([id,v])=>{if(PEND[id]&&PEND[id]!=="none"&&(ST[id]?.updatedAt||"")>=(v.updatedAt||""))return;if(PEND[id]==="none")return;ST[id]=v});
   Object.keys(ST).forEach(id=>{if(!remote[id]&&!PEND[id])delete ST[id]});
   SET("status",JSON.stringify(ST));savePend();render();await flush()}
+let mode="in";
+const show=(el,t,good)=>{el.textContent=t;el.className="msg show "+(good?"good":"bad")},hide=el=>el.className="msg";
+const friendly=e=>{const m=(e&&e.message||String(e)).toLowerCase();
+  if(m.includes("provider is not enabled")||m.includes("unsupported provider"))return"Google sign-in isn't switched on yet. Please use email for now.";
+  if(m.includes("invalid login"))return"That email and password don't match. Try again or reset your password.";
+  if(m.includes("email not confirmed"))return"Please confirm your email first — check your inbox for the confirmation link.";
+  if(m.includes("already registered")||m.includes("already been registered"))return"An account with this email already exists. Try signing in instead.";
+  if(m.includes("rate limit")||m.includes("too many"))return"Too many attempts. Please wait a minute and try again.";
+  if(m.includes("password should be")||m.includes("weak"))return"Password is too weak — use at least 6 characters.";
+  if(m.includes("failed to fetch")||m.includes("network"))return"Can't reach the server. Check your connection.";
+  return e.message||"Something went wrong. Please try again."};
+const emOk=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+function setMode(m){mode=m;document.querySelectorAll("#auth .seg button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
+  $("#aTitle").textContent=m==="in"?"Welcome back":"Create your account";$("#aSub").textContent=m==="in"?"Sign in":"Create account";
+  $("#aPw").autocomplete=m==="in"?"current-password":"new-password";$("#forgot").style.visibility=m==="in"?"":"hidden";hide($("#msg"));$("#eEm").textContent=$("#ePw").textContent=""}
+function openAuth(rec){$("#aMain").style.display=rec?"none":"";$("#aRec").style.display=rec?"":"none";if(!rec)setMode(mode);$("#auth").showModal()}
+const busy=(b,on,t)=>{b.disabled=on;if(on){b._t=b.innerHTML;b.textContent=t||"Please wait…"}else if(b._t)b.innerHTML=b._t};
+if(sb){
+document.querySelectorAll("#auth .seg button").forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+$("#authX").onclick=()=>$("#auth").close();
+const tog=(btn,inp)=>btn.onclick=()=>{const p=$(inp).type==="password";$(inp).type=p?"text":"password";btn.textContent=p?"Hide":"Show"};tog($("#pwT"),"#aPw");tog($("#pwT2"),"#nPw");
+$("#aEm").oninput=()=>$("#eEm").textContent="";$("#aPw").oninput=()=>$("#ePw").textContent="";
+$("#gBtn").onclick=async()=>{hide($("#msg"));busy($("#gBtn"),true,"Redirecting to Google…");
+  try{let en=true;try{const r=await fetch(SB_URL+"/auth/v1/settings",{headers:{apikey:SB_KEY}});if(r.ok)en=!!(await r.json()).external?.google}catch(_){}
+  if(!en)throw new Error("provider is not enabled");const{error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:SITE}});if(error)throw error}catch(e){show($("#msg"),friendly(e));busy($("#gBtn"),false)}};
+$("#aForm").onsubmit=async e=>{e.preventDefault();hide($("#msg"));const em=$("#aEm").value.trim(),pw=$("#aPw").value;let bad=false;
+  if(!emOk(em)){$("#eEm").textContent="Enter a valid email address.";bad=true}
+  if(pw.length<6){$("#ePw").textContent=pw?"Password must be at least 6 characters.":"Enter your password.";bad=true}
+  if(bad)return;const b=$("#aSub");busy(b,true);
+  try{if(mode==="in"){const{error}=await sb.auth.signInWithPassword({email:em,password:pw});if(error)throw error;$("#auth").close();toast("Signed in ✓")}
+    else{const{data,error}=await sb.auth.signUp({email:em,password:pw,options:{emailRedirectTo:SITE}});if(error)throw error;
+      if(data.user&&data.user.identities&&data.user.identities.length===0)throw new Error("already registered");
+      if(data.session){$("#auth").close();toast("Account created ✓")}else show($("#msg"),"Almost there! Check your inbox to confirm your email, then sign in.",true)}}
+  catch(x){show($("#msg"),friendly(x))}busy(b,false)};
+$("#forgot").onclick=async()=>{const em=$("#aEm").value.trim();if(!emOk(em)){$("#eEm").textContent="Enter your email above, then click Forgot password.";return}
+  const{error}=await sb.auth.resetPasswordForEmail(em,{redirectTo:SITE});error?show($("#msg"),friendly(error)):show($("#msg"),"Password reset link sent — check your email.",true)};
+$("#magic").onclick=async()=>{const em=$("#aEm").value.trim();if(!emOk(em)){$("#eEm").textContent="Enter your email above to get a sign-in link.";return}
+  const{error}=await sb.auth.signInWithOtp({email:em,options:{emailRedirectTo:SITE}});error?show($("#msg"),friendly(error)):show($("#msg"),"Sign-in link sent — check your email.",true)};
+$("#aRec").onsubmit=async e=>{e.preventDefault();const pw=$("#nPw").value;if(pw.length<6){$("#eN").textContent="At least 6 characters.";return}$("#eN").textContent="";
+  const{error}=await sb.auth.updateUser({password:pw});if(error)show($("#msg2"),friendly(error));else{$("#auth").close();toast("Password updated ✓")}};
+document.addEventListener("click",e=>{const m=$("#acctMenu");if(m&&!e.target.closest(".acct"))m.classList.remove("open")});
+}
 function authUI(){const b=$("#authBox");
   if(!sb){b.innerHTML="";sync("Offline (Supabase unavailable) – saved locally");return}
-  if(user){b.innerHTML=`<span class="hint" style="margin:0">${esc(user.email)}</span><button class="btn" id="out">Sign out</button>`;$("#out").onclick=async()=>{await sb.auth.signOut()}}
-  else{b.innerHTML=`<input id="em" type="email" placeholder="you@email.com" style="width:190px"><button class="btn acc" id="in">Sign in</button>`;sync("Saved on this device only");
-    $("#in").onclick=async()=>{const em=$("#em").value.trim();if(!em)return toast("Enter your email");const{error}=await sb.auth.signInWithOtp({email:em,options:{emailRedirectTo:SITE}});toast(error?"Error: "+error.message:"Magic link sent – check your email")}}}
-if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;authUI();if(nu&&changed)setTimeout(load,0)});
+  if(user){const md=user.user_metadata||{},nm=md.full_name||md.name||"",pic=md.avatar_url||md.picture||"",ini=esc((nm||user.email||"?")[0].toUpperCase());
+    b.innerHTML=`<div class="acct"><button class="btn" id="acctBtn" style="display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px"><span class="av" ${pic?`style="background-image:url('${esc(pic)}')"`:""}>${pic?"":ini}</span><span class="s" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(user.email)}</span>▾</button>
+    <div class="menu" id="acctMenu">${nm?`<b>${esc(nm)}</b><br>`:""}<span class="s">${esc(user.email)}</span><p class="hint" id="syncM">${esc($("#sync").textContent)}</p><button class="btn wide" id="out">Sign out</button></div></div>`;
+    $("#acctBtn").onclick=()=>$("#acctMenu").classList.toggle("open");$("#out").onclick=async()=>{await sb.auth.signOut();toast("Signed out")}}
+  else{b.innerHTML=`<button class="btn acc" id="in">Sign in</button>`;sync("Saved on this device only");$("#in").onclick=()=>openAuth(false)}}
+if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;authUI();if(nu&&changed)setTimeout(load,0);
+    if(ev==="PASSWORD_RECOVERY")setTimeout(()=>openAuth(true),0)});
   window.addEventListener("online",flush)}
 authUI();
 $("#exp").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({exported:new Date().toISOString(),items:ST},null,1)],{type:"application/json"}));a.download="watchlist-status.json";a.click()};

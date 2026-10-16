@@ -37,6 +37,15 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 .st button+button{border-left:1px solid var(--line)}
 .st button.on[data-s=todo]{background:#e5484d22;color:var(--acc)}.st button.on[data-s=watching]{background:#d18a0022;color:var(--mid)}.st button.on[data-s=watched]{background:#2f9e5b22;color:var(--ok);font-weight:700}
 .rate{display:flex;gap:4px}.rate button{flex:1;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 2px;font-size:11.5px;cursor:pointer;color:var(--soft)}.rate button.on{background:var(--ink);color:var(--bg);font-weight:700}.rb{top:auto;bottom:8px;left:8px;background:#000c}
+.auth{max-width:420px;padding:26px}.auth h2{margin:0 0 4px}.gbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;font-weight:600;border-radius:11px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:15px}.gbtn:hover{border-color:var(--acc)}
+.or{display:flex;align-items:center;gap:10px;color:var(--soft);font-size:12px;margin:16px 0}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;margin-bottom:12px}.seg button{flex:1;border:0;background:none;padding:7px;border-radius:8px;cursor:pointer;font-weight:600;color:var(--soft)}.seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--sh)}
+.pw{position:relative}.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer;color:var(--soft);font-size:12px}
+.err{color:var(--acc);font-size:12.5px;min-height:16px}.msg{font-size:13px;padding:9px 11px;border-radius:9px;margin:8px 0;display:none}.msg.show{display:block}.msg.bad{background:#e5484d1a;color:var(--acc)}.msg.good{background:#2f9e5b1a;color:var(--ok)}
+.link{background:none;border:0;color:var(--acc);cursor:pointer;padding:0;font-size:13px}.wide{width:100%;padding:11px}
+.acct{position:relative}.av{width:34px;height:34px;border-radius:50%;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800;overflow:hidden;background-size:cover}
+.menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);padding:12px;min-width:220px;display:none;z-index:9}.menu.open{display:block}
+.x{position:absolute;top:12px;right:14px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--soft)}
 .empty{text-align:center;padding:50px;color:var(--soft);border:1px dashed var(--line);border-radius:14px}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:560px;width:94%}
 dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
@@ -71,6 +80,18 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 <div class="f"><label>API key</label><input id="aiKey" type="password" placeholder="sk-…"></div>
 <h3>💾 Backup</h3><p class="hint">Sign in (header) to sync statuses across devices via Supabase. Export/import works anytime.</p><div class="row"><button class="btn" id="exp">Export JSON</button><button class="btn" id="impB">Import JSON</button><input type="file" id="imp" accept=".json" hidden></div>
 <div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn acc" id="save">Save &amp; close</button></div></dialog>
+<dialog id="auth" class="auth"><button class="x" id="authX" aria-label="Close">×</button>
+<div id="aMain"><h2 id="aTitle">Welcome back</h2><p class="hint" style="margin-bottom:16px">Sign in to sync your watchlist across devices.</p>
+<button class="gbtn" id="gBtn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-4z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.7-.4-4z"/></svg>Continue with Google</button>
+<div class="or">or use email</div>
+<div class="seg"><button class="on" data-m="in">Sign in</button><button data-m="up">Create account</button></div>
+<form id="aForm" novalidate><div class="f"><label for="aEm">Email</label><input id="aEm" type="email" autocomplete="email" placeholder="you@email.com"><div class="err" id="eEm"></div></div>
+<div class="f"><label for="aPw">Password</label><div class="pw"><input id="aPw" type="password" autocomplete="current-password" placeholder="At least 6 characters"><button type="button" id="pwT">Show</button></div><div class="err" id="ePw"></div></div>
+<div id="msg" class="msg"></div>
+<button class="btn acc wide" id="aSub" type="submit">Sign in</button></form>
+<div class="row" style="justify-content:space-between;margin-top:12px"><button class="link" id="forgot">Forgot password?</button><button class="link" id="magic">✉️ Email me a sign-in link</button></div></div>
+<form id="aRec" style="display:none" novalidate><h2>Set a new password</h2><p class="hint">Choose a new password for your account.</p><div class="f" style="margin-top:12px"><label for="nPw">New password</label><div class="pw"><input id="nPw" type="password" autocomplete="new-password"><button type="button" id="pwT2">Show</button></div><div class="err" id="eN"></div></div><div id="msg2" class="msg"></div><button class="btn acc wide" type="submit">Update password</button></form>
+</dialog>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script></body></html>
