@@ -29,7 +29,7 @@ let tab="all",page=1,vibe=null; const PER=48;
 const TABS=[["all","All"],["todo","To watch"],["watching","Watching"],["watched","✅ Watched"]];
 function tabs(){$("#tabs").innerHTML=TABS.map(([k,n])=>`<span class="tab ${tab===k?"on":""}" data-t="${k}">${n} (${k==="all"?T.length:T.filter(t=>stOf(t.id)===k).length})</span>`).join("")}
 $("#tabs").onclick=e=>{const c=e.target.closest(".tab");if(c){tab=c.dataset.t;page=1;render()}};
-["q","type","lang","y1","y2","sort"].forEach(id=>$("#"+id).addEventListener("input",()=>{page=1;render()}));
+["rf","q","type","lang","y1","y2","sort"].forEach(id=>$("#"+id).addEventListener("input",()=>{page=1;render()}));
 $("#reset").onclick=()=>{$("#q").value="";$("#type").value="all";$("#lang").value="all";$("#y1").value=YMIN;$("#y2").value=YMAX;selG.clear();document.querySelectorAll("#genres .chip").forEach(c=>c.classList.remove("on"));clearVibe();};
 $("#more").onclick=()=>{page++;render()};
 // ---- vibe search (local) ----
@@ -82,24 +82,26 @@ $("#ex").innerHTML=EX.map(e=>`<span class="chip">${e}</span>`).join("");
 $("#ex").onclick=e=>{if(e.target.classList.contains("chip")){$("#vibe").value=e.target.textContent;runVibe()}};
 // ---- render ----
 function filtered(){
-  const q=$("#q").value.trim().toLowerCase(),ty=$("#type").value,lg=$("#lang").value,y1=+$("#y1").value||0,y2=+$("#y2").value||9999;
+  const rf=$("#rf").value,q=$("#q").value.trim().toLowerCase(),ty=$("#type").value,lg=$("#lang").value,y1=+$("#y1").value||0,y2=+$("#y2").value||9999;
   let list=vibe?vibe.res.map(r=>Object.assign({},BY[r.id],{why:r.why})):T.slice();
-  list=list.filter(t=>(!q||t.blob.includes(q))&&(ty==="all"||t.type===ty)&&(lg==="all"||t.language===lg)&&(!t.year||(t.year>=y1&&t.year<=y2))&&[...selG].every(g=>t.genres.includes(g))&&(tab==="all"||stOf(t.id)===tab));
+  list=list.filter(t=>(!q||t.blob.includes(q))&&(ty==="all"||t.type===ty)&&(lg==="all"||t.language===lg)&&(!t.year||(t.year>=y1&&t.year<=y2))&&[...selG].every(g=>t.genres.includes(g))&&(tab==="all"||stOf(t.id)===tab)&&(tab!=="watched"||rf==="all"||(ST[t.id]?.rating||"none")===rf));
   if(!vibe){const s=$("#sort").value,f={saves:(a,b)=>(b.saves||0)-(a.saves||0),rating:(a,b)=>(b.rating||0)-(a.rating||0),new:(a,b)=>(b.year||0)-(a.year||0),old:(a,b)=>(a.year||9999)-(b.year||9999),az:(a,b)=>a.title.localeCompare(b.title)}[s];list.sort(f)}
   return list;
 }
+const RT={dislike:["👎","Not for me"],like:["👍","Like"],love:["👍👍","Love it!!"]};
 function card(t){const s=stOf(t.id);
-  return `<article class="card" data-id="${t.id}"><div class="poster" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}<span class="badge">${t.type}</span>${t.rating?`<span class="badge rt">★ ${t.rating}</span>`:""}</div>
+  return `<article class="card" data-id="${t.id}"><div class="poster" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}<span class="badge">${t.type}</span>${t.rating?`<span class="badge rt">★ ${t.rating}</span>`:""}${s==="watched"&&ST[t.id].rating?`<span class="badge rb">${RT[ST[t.id].rating][0]} ${RT[ST[t.id].rating][1]}</span>`:""}</div>
   <div class="body"><div class="t">${esc(t.title)}</div><div class="s">${t.year||"—"} · ${esc(t.language)} · ${esc(t.genres.join(", "))}</div>
   ${t.why?`<div class="why">Matched: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
-  <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div></div></article>`}
-function render(){tabs();const list=filtered();
+  <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div>${s==="watched"?`<div class="rate">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}" aria-pressed="${ST[t.id].rating===k}" title="${n}">${e} ${n}</button>`).join("")}</div>`:""}</div></article>`}
+function render(){tabs();$("#rf").style.display=tab==="watched"?"":"none";const list=filtered();
   $("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;
   $("#info").textContent=(vibe?`Vibe matches for “${vibe.q}”: `:"")+`${list.length} title${list.length===1?"":"s"}`;
   $("#grid").innerHTML=list.length?list.slice(0,page*PER).map(card).join(""):`<div class="empty" style="grid-column:1/-1"><b>Nothing here</b><br>Try loosening the filters.</div>`;
   $("#more").style.display=list.length>page*PER?"":"none";
 }
-$("#grid").onclick=e=>{const b=e.target.closest(".st button");if(b){const id=b.closest(".card").dataset.id,s=b.dataset.s;
+$("#grid").onclick=e=>{const rb=e.target.closest(".rate button");if(rb){const id=rb.closest(".card").dataset.id,r=rb.dataset.r;const o=ST[id];if(o.rating===r)delete o.rating;else o.rating=r;o.updatedAt=new Date().toISOString();PEND[id]="watched";savePend();saveST();render();flush();return}
+const b=e.target.closest(".st button");if(b){const id=b.closest(".card").dataset.id,s=b.dataset.s;
     if(stOf(id)===s)delete ST[id];else ST[id]={status:s,title:BY[id].title,updatedAt:new Date().toISOString()};
     PEND[id]=ST[id]?ST[id].status:"none";savePend();saveST();render();flush();if(s==="watched"&&ST[id])toast(`“${BY[id].title}” added to Watched`);return}
   const d=e.target.closest(".d");if(d)d.classList.toggle("open")};
@@ -113,14 +115,14 @@ const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;let us
 const sync=(m)=>$("#sync").textContent=m;
 let PEND=JSON.parse(LS("pending")||"{}");const savePend=()=>SET("pending",JSON.stringify(PEND));
 async function flush(){if(!sb||!user)return;const ids=Object.keys(PEND);if(!ids.length)return sync("☁️ Synced");sync("⏳ Saving…");
-  try{const up=ids.filter(id=>PEND[id]!=="none").map(id=>({user_id:user.id,title_id:id,status:ST[id].status,updated_at:ST[id].updatedAt}));const del=ids.filter(id=>PEND[id]==="none");
+  try{const up=ids.filter(id=>PEND[id]!=="none").map(id=>({user_id:user.id,title_id:id,status:ST[id].status,updated_at:ST[id].updatedAt,rating:ST[id].status==="watched"?(ST[id].rating||null):null}));const del=ids.filter(id=>PEND[id]==="none");
     if(up.length){const{error}=await sb.from("watch_status").upsert(up,{onConflict:"user_id,title_id"});if(error)throw error}
     if(del.length){const{error}=await sb.from("watch_status").delete().eq("user_id",user.id).in("title_id",del);if(error)throw error}
     ids.forEach(id=>delete PEND[id]);savePend();sync("☁️ Synced")}catch(e){sync("⚠️ Sync failed – will retry");console.error(e)}}
 autoPush=()=>{};
 const origSave=saveST;
-async function load(){sync("⏳ Loading…");const{data,error}=await sb.from("watch_status").select("title_id,status,updated_at");if(error){sync("⚠️ Load failed");return}
-  const remote={};data.forEach(r=>remote[r.title_id]={status:r.status,title:BY[r.title_id]?.title||"",updatedAt:r.updated_at});
+async function load(){sync("⏳ Loading…");const{data,error}=await sb.from("watch_status").select("title_id,status,updated_at,rating");if(error){sync("⚠️ Load failed");return}
+  const remote={};data.forEach(r=>remote[r.title_id]={status:r.status,title:BY[r.title_id]?.title||"",updatedAt:r.updated_at,...(r.rating?{rating:r.rating}:{})});
   const mk="merged_"+user.id;
   if(!LS(mk)){Object.entries(ST).forEach(([id,v])=>{const r=remote[id];if(!r||(v.updatedAt||"")>(r.updatedAt||""))PEND[id]=v.status});SET(mk,"1")}
   Object.entries(remote).forEach(([id,v])=>{if(PEND[id]&&PEND[id]!=="none"&&(ST[id]?.updatedAt||"")>=(v.updatedAt||""))return;if(PEND[id]==="none")return;ST[id]=v});
