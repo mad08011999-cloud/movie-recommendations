@@ -13,7 +13,7 @@ document.documentElement.dataset.theme=theme;
 $("#themeBtn").onclick=()=>{const n=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=n;SET("theme",n)};
 // status
 let ST=JSON.parse(LS("status")||"{}");
-const saveST=()=>{SET("status",JSON.stringify(ST));autoPush()};
+let autoPush=()=>{};const saveST=()=>{SET("status",JSON.stringify(ST))};
 const stOf=id=>ST[id]?.status||"none";
 // filters
 const years=T.map(t=>t.year).filter(Boolean),YMIN=Math.min(...years),YMAX=Math.max(...years);
@@ -101,27 +101,41 @@ function render(){tabs();const list=filtered();
 }
 $("#grid").onclick=e=>{const b=e.target.closest(".st button");if(b){const id=b.closest(".card").dataset.id,s=b.dataset.s;
     if(stOf(id)===s)delete ST[id];else ST[id]={status:s,title:BY[id].title,updatedAt:new Date().toISOString()};
-    saveST();render();if(s==="watched"&&ST[id])toast(`“${BY[id].title}” added to Watched`);return}
+    PEND[id]=ST[id]?ST[id].status:"none";savePend();saveST();render();flush();if(s==="watched"&&ST[id])toast(`“${BY[id].title}” added to Watched`);return}
   const d=e.target.closest(".d");if(d)d.classList.toggle("open")};
 // ---- settings / sync ----
-const gh=()=>({repo:LS("ghRepo")||DEF_REPO,tok:LS("ghTok")||""});
-$("#setBtn").onclick=()=>{const a=ai(),g=gh();$("#aiBase").value=LS("aiBase")||"";$("#aiModel").value=LS("aiModel")||"";$("#aiKey").value=a.key;$("#ghRepo").value=g.repo;$("#ghTok").value=g.tok;$("#dlg").showModal()};
-$("#save").onclick=()=>{["aiBase","aiModel","aiKey","ghRepo","ghTok"].forEach(k=>{const v=$("#"+k).value.trim();v?SET(k,v):localStorage.removeItem(k)});aiNote();$("#dlg").close();toast("Settings saved in this browser")};
-const b64=s=>btoa(unescape(encodeURIComponent(s))),unb64=s=>decodeURIComponent(escape(atob(s.replace(/\n/g,""))));
-async function ghGet(){const {repo,tok}=gh();const h=tok?{Authorization:"Bearer "+tok}:{};
-  const r=await fetch(`https://api.github.com/repos/${repo}/contents/watched.json?t=${Date.now()}`,{headers:h,cache:"no-store"});if(r.status===404)return{sha:null,data:{items:{}}};if(!r.ok)throw new Error(r.status);const j=await r.json();return{sha:j.sha,data:JSON.parse(unb64(j.content))}}
-function merge(remote){let n=0;Object.entries(remote.items||{}).forEach(([id,v])=>{if(!BY[id])return;const l=ST[id];if(!l||(v.updatedAt||"")>(l.updatedAt||"")){ST[id]=v;n++}});SET("status",JSON.stringify(ST));return n}
-async function pull(silent){try{const {data}=await ghGet();const n=merge(data);render();if(!silent)toast(`Pulled from GitHub (${n} updated)`)}catch(e){if(!silent)toast("Pull failed: "+e.message)}}
-async function push(){const {repo,tok}=gh();if(!tok)return toast("Add a GitHub token in Settings first");
-  try{const {sha,data}=await ghGet();merge(data);
-    const watched=Object.entries(ST).filter(([,v])=>v.status==="watched").map(([id,v])=>({id,title:v.title,watchedAt:v.updatedAt}));
-    const body={updated:new Date().toISOString(),watched,items:ST};
-    const r=await fetch(`https://api.github.com/repos/${repo}/contents/watched.json`,{method:"PUT",headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},body:JSON.stringify({message:"Update watched list",content:b64(JSON.stringify(body,null,1)),...(sha?{sha}:{})})});
-    if(!r.ok)throw new Error(r.status);toast("Synced to GitHub ✓")}catch(e){toast("Push failed: "+e.message)}}
-let pt;function autoPush(){if(gh().tok){clearTimeout(pt);pt=setTimeout(push,2500)}}
-$("#pull").onclick=()=>pull(false);$("#push").onclick=push;
+$("#setBtn").onclick=()=>{$("#aiBase").value=LS("aiBase")||"";$("#aiModel").value=LS("aiModel")||"";$("#aiKey").value=ai().key;$("#dlg").showModal()};
+$("#save").onclick=()=>{["aiBase","aiModel","aiKey"].forEach(k=>{const v=$("#"+k).value.trim();v?SET(k,v):localStorage.removeItem(k)});aiNote();$("#dlg").close();toast("Settings saved in this browser")};
+["ghRepo","ghTok"].forEach(k=>localStorage.removeItem(k));
+// ---- Supabase ----
+const SB_URL="https://mazrqepjgdtdraxpcptk.supabase.co",SB_KEY="sb_publishable_-2do3uyVQ4kcl7PfnBeDpw_mWEc7TXN",SITE="https://mad08011999-cloud.github.io/movie-recommendations/";
+const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;let user=null;
+const sync=(m)=>$("#sync").textContent=m;
+let PEND=JSON.parse(LS("pending")||"{}");const savePend=()=>SET("pending",JSON.stringify(PEND));
+async function flush(){if(!sb||!user)return;const ids=Object.keys(PEND);if(!ids.length)return sync("☁️ Synced");sync("⏳ Saving…");
+  try{const up=ids.filter(id=>PEND[id]!=="none").map(id=>({user_id:user.id,title_id:id,status:ST[id].status,updated_at:ST[id].updatedAt}));const del=ids.filter(id=>PEND[id]==="none");
+    if(up.length){const{error}=await sb.from("watch_status").upsert(up,{onConflict:"user_id,title_id"});if(error)throw error}
+    if(del.length){const{error}=await sb.from("watch_status").delete().eq("user_id",user.id).in("title_id",del);if(error)throw error}
+    ids.forEach(id=>delete PEND[id]);savePend();sync("☁️ Synced")}catch(e){sync("⚠️ Sync failed – will retry");console.error(e)}}
+autoPush=()=>{};
+const origSave=saveST;
+async function load(){sync("⏳ Loading…");const{data,error}=await sb.from("watch_status").select("title_id,status,updated_at");if(error){sync("⚠️ Load failed");return}
+  const remote={};data.forEach(r=>remote[r.title_id]={status:r.status,title:BY[r.title_id]?.title||"",updatedAt:r.updated_at});
+  const mk="merged_"+user.id;
+  if(!LS(mk)){Object.entries(ST).forEach(([id,v])=>{const r=remote[id];if(!r||(v.updatedAt||"")>(r.updatedAt||""))PEND[id]=v.status});SET(mk,"1")}
+  Object.entries(remote).forEach(([id,v])=>{if(PEND[id]&&PEND[id]!=="none"&&(ST[id]?.updatedAt||"")>=(v.updatedAt||""))return;if(PEND[id]==="none")return;ST[id]=v});
+  Object.keys(ST).forEach(id=>{if(!remote[id]&&!PEND[id])delete ST[id]});
+  SET("status",JSON.stringify(ST));savePend();render();await flush()}
+function authUI(){const b=$("#authBox");
+  if(!sb){b.innerHTML="";sync("Offline (Supabase unavailable) – saved locally");return}
+  if(user){b.innerHTML=`<span class="hint" style="margin:0">${esc(user.email)}</span><button class="btn" id="out">Sign out</button>`;$("#out").onclick=async()=>{await sb.auth.signOut()}}
+  else{b.innerHTML=`<input id="em" type="email" placeholder="you@email.com" style="width:190px"><button class="btn acc" id="in">Sign in</button>`;sync("Saved on this device only");
+    $("#in").onclick=async()=>{const em=$("#em").value.trim();if(!em)return toast("Enter your email");const{error}=await sb.auth.signInWithOtp({email:em,options:{emailRedirectTo:SITE}});toast(error?"Error: "+error.message:"Magic link sent – check your email")}}}
+if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;authUI();if(nu&&changed)setTimeout(load,0)});
+  window.addEventListener("online",flush)}
+authUI();
 $("#exp").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({exported:new Date().toISOString(),items:ST},null,1)],{type:"application/json"}));a.download="watchlist-status.json";a.click()};
 $("#impB").onclick=()=>$("#imp").click();
-$("#imp").onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());const n=merge(j.items?j:{items:j});render();toast(`Imported ${n} entries`)}catch(x){toast("Invalid file")}};
-render();pull(true);
+$("#imp").onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());const it=j.items||j;let n=0;Object.entries(it).forEach(([id,v])=>{if(BY[id]&&v&&v.status&&(!ST[id]||(v.updatedAt||"")>(ST[id].updatedAt||""))){ST[id]=v;PEND[id]=v.status;n++}});saveST();savePend();render();flush();toast(`Imported ${n} entries`)}catch(x){toast("Invalid file")}};
+render();
 })();

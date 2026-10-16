@@ -42,7 +42,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none}.toast.show{opacity:1}
 </style></head><body><div class="wrap">
 <header><div><h1>Poojith's Watchlist<span>.</span></h1><p class="sub">From the <b>Movie Recommendations</b> collection — <b id="cnt"></b></p></div>
-<div class="row"><button class="btn" id="themeBtn">🌓 Theme</button><button class="btn" id="setBtn">⚙️ Settings &amp; sync</button></div></header>
+<div class="row"><span id="sync" class="hint" style="margin:0"></span><span id="authBox" class="row" style="gap:6px"></span><button class="btn" id="themeBtn">🌓 Theme</button><button class="btn" id="setBtn">⚙️ Settings</button></div></header>
 
 <section class="panel ai"><label for="vibe">✨ AI search — describe a gist or vibe</label>
 <div class="row" style="margin-top:6px"><div class="f" style="flex:5"><input id="vibe" placeholder="e.g. feel-good underdog sports story, or a slow-burn heist with a twist"></div><button class="btn acc" id="vibeBtn">Find matches</button><button class="btn" id="vibeClr">Clear</button></div>
@@ -68,11 +68,8 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 <div class="f"><label>API base URL (OpenAI-compatible)</label><input id="aiBase" placeholder="https://api.openai.com/v1"></div>
 <div class="f"><label>Model</label><input id="aiModel" placeholder="gpt-4o-mini"></div>
 <div class="f"><label>API key</label><input id="aiKey" type="password" placeholder="sk-…"></div>
-<h3>☁️ Sync watched list to GitHub (optional)</h3><p class="hint">Status is always saved in this browser. To sync across devices, paste a fine-grained GitHub token with <i>Contents: read &amp; write</i> on this repo only. It saves <code>watched.json</code> in the repo.</p>
-<div class="f"><label>Repo (owner/name)</label><input id="ghRepo"></div>
-<div class="f"><label>GitHub token</label><input id="ghTok" type="password" placeholder="github_pat_…"></div>
-<div class="row"><button class="btn" id="pull">⬇ Pull from GitHub</button><button class="btn" id="push">⬆ Push to GitHub</button></div>
-<h3>💾 Backup</h3><div class="row"><button class="btn" id="exp">Export JSON</button><button class="btn" id="impB">Import JSON</button><input type="file" id="imp" accept=".json" hidden></div>
+<h3>💾 Backup</h3><p class="hint">Sign in (header) to sync statuses across devices via Supabase. Export/import works anytime.</p><div class="row"><button class="btn" id="exp">Export JSON</button><button class="btn" id="impB">Import JSON</button><input type="file" id="imp" accept=".json" hidden></div>
 <div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn acc" id="save">Save &amp; close</button></div></dialog>
 <div class="toast" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script></body></html>
