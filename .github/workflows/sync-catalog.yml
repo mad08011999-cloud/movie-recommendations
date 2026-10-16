@@ -1,0 +1,27 @@
+name: Daily catalog sync
+on:
+  schedule:
+    - cron: '0 14 * * *'   # 14:00 UTC = 7am PDT / 6am PST
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: { group: catalog-sync, cancel-in-progress: false }
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch source repo (public)
+        run: git clone --depth 1 https://github.com/poojithmalla8/movie-watchlist.git /tmp/source
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Merge, enrich, dedupe
+        run: python scripts/sync_catalog.py /tmp/source
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalog.json scripts/enrich_cache.json
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "Daily catalog sync from movie-watchlist"
+          git push
