@@ -115,6 +115,26 @@ def ratings(cat):
     omdb(cat)
     print("coverage: imdbRating", sum(c.get("imdbRating") is not None for c in cat), "rtScore", sum(c.get("rtScore") is not None for c in cat), "of", len(cat))
 
+SB_URL = "https://mazrqepjgdtdraxpcptk.supabase.co"; SB_KEY = "sb_publishable_-2do3uyVQ4kcl7PfnBeDpw_mWEc7TXN"  # public key, read-only via RLS
+def fold_user_titles(cat):
+    """Copy titles users added via the add-title Edge Function (public.user_titles) into catalog.json + streaming/."""
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(SB_URL + "/rest/v1/user_titles?select=id,record,display_name&order=created_at.asc",
+                                   headers={"apikey": SB_KEY, **UA}), timeout=30)
+        rows = json.load(r)
+    except Exception as e: print("user_titles not available:", e); return 0
+    have = {c["id"] for c in cat}; n = 0
+    for row in rows:
+        rec = dict(row.get("record") or {}); rid = row.get("id")
+        if not rid or rid in have or not re.fullmatch(r"tt\d{6,10}", rid): continue
+        st = rec.pop("stream", None)
+        rec = {k: rec.get(k) for k in FIELDS} | {"source": rec.get("source") or f"{row.get('display_name') or 'Someone'}'s pick"}
+        rec["id"] = rid; rec["genres"] = rec["genres"] or []; rec["saves"] = rec["saves"] or 0; rec["desc"] = rec["desc"] or ""
+        if st and not os.path.exists(f"streaming/{rid}.json"):
+            os.makedirs("streaming", exist_ok=True); json.dump(st, open(f"streaming/{rid}.json", "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        cat.append(rec); have.add(rid); n += 1
+    print("user-added titles folded in:", n); return n
+
 def main():
     cat = json.load(open(CAT))
     for c in cat:
@@ -167,6 +187,7 @@ def main():
                 if blank(c.get("year")) and x[0].get("y"): c["year"] = x[0]["y"]; nfilled["year"] += 1
         cache[c["id"]] = int(time.time())
     cache = {k: v for k, v in cache.items() if k in by_id and any(blank(by_id[k].get(f)) for f in ("language","poster","desc","genres","year"))}
+    fold_user_titles(cat)
     cat, rm2 = dedupe(cat)
     ratings(cat)
     rm = rm1 + rm2
@@ -179,3 +200,4 @@ def main():
     json.dump(cache, open(CACHE, "w"), indent=0, sort_keys=True)
 
 if __name__ == "__main__": main()
+

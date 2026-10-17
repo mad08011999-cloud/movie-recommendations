@@ -57,6 +57,8 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 .mini .mv{aspect-ratio:16/9}.mini iframe{width:100%;height:100%;border:0;display:block}.mini .mc{color:#ddd;font-size:12px;padding:7px 36px 8px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mini .mx{top:auto;bottom:2px;right:6px;color:#fff;font-size:22px;z-index:2}
 @media(max-width:640px){.mini{left:0;right:0;bottom:0;width:100%;border-radius:12px 12px 0 0}}
+.skel{background:linear-gradient(100deg,var(--line) 30%,var(--card) 50%,var(--line) 70%);background-size:300% 100%;animation:sh 1.3s linear infinite}@keyframes sh{0%{background-position:100% 0}100%{background-position:0 0}}
+.pcard .rot{color:var(--acc);font-weight:600}.pcard.error .poster,.pcard.exists .poster{opacity:.6}.pcard .ph{font-size:34px}
 .empty{text-align:center;padding:50px;color:var(--soft);border:1px dashed var(--line);border-radius:14px}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:560px;width:94%}
 dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
@@ -79,6 +81,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 </div>
 <label style="display:block;margin-top:12px">Genres</label><div class="chips" id="genres"></div></section>
 
+<section id="mine" class="panel" hidden><h3 style="margin:0 0 12px">Your additions</h3><div class="grid" id="mineGrid"></div></section>
 <div class="tabs" id="tabs"></div>
 <div class="meta"><span id="info"></span><select id="rf" style="width:auto;display:none"><option value="all">All ratings</option><option value="love">❤️ Love it!!</option><option value="like">👍 Like</option><option value="dislike">👎 Not for me</option><option value="none">Unrated</option></select><button class="btn" id="reset">Reset filters</button></div>
 <div class="grid" id="grid"></div><div style="text-align:center;margin-top:24px"><button class="btn" id="more">Show more</button></div>
@@ -104,6 +107,12 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 <form id="aRec" style="display:none" novalidate><h2>Set a new password</h2><p class="hint">Choose a new password for your account.</p><div class="f" style="margin-top:12px"><label for="nPw">New password</label><div class="pw"><input id="nPw" type="password" autocomplete="new-password"><button type="button" id="pwT2">Show</button></div><div class="err" id="eN"></div></div><div id="msg2" class="msg"></div><button class="btn acc wide" type="submit">Update password</button></form>
 </dialog>
 <dialog id="det" class="det" aria-label="Title details"><button class="x" id="detX" aria-label="Close">×</button><div id="detBody"></div><div id="mini" class="mini" hidden><button class="x mx" id="miniX" aria-label="Close trailer">×</button><div class="mv"></div><div class="mc"></div></div></dialog>
+<dialog id="addDlg" class="auth"><button class="x" id="addX" aria-label="Close">×</button><h2>Add a title</h2><p class="hint" style="margin-bottom:12px">We'll find it on IMDb and add ratings, streaming and the trailer automatically.</p>
+<form id="addF" novalidate><div class="f"><label for="addQ">Title</label><input id="addQ" required maxlength="200" placeholder="e.g. Lucky Baskhar" autocomplete="off"></div>
+<div class="row"><div class="f"><label for="addY">Year (optional)</label><input id="addY" type="number" min="1880" max="2100" placeholder="2024"></div>
+<div class="f"><label for="addType">Type (optional)</label><select id="addType"><option value="">Any</option><option value="movie">Movie</option><option value="series">Series</option></select></div></div>
+<div class="f" style="margin-top:8px"><label for="addLang">Language (optional)</label><input id="addLang" maxlength="60" placeholder="e.g. Telugu"></div>
+<div id="addM" style="margin:10px 0"></div><button class="btn acc wide" id="addGo" type="submit">Add to the list</button></form></dialog>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script></body></html>

@@ -5,7 +5,8 @@ const DEF_REPO="mad08011999-cloud/movie-recommendations";
 const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2600)};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const T=await (await fetch("catalog.json")).json();
-T.forEach(t=>{t.genres=t.genres||[];t.language=t.language||"Unknown";t.blob=(t.title+" "+(t.source||"")+" "+t.genres.join(" ")+" "+t.desc+" "+t.type+" "+t.language).toLowerCase()});
+function prep(t){t.genres=t.genres||[];t.language=t.language||"Unknown";t.desc=t.desc||"";t.blob=(t.title+" "+(t.source||"")+" "+t.genres.join(" ")+" "+t.desc+" "+t.type+" "+t.language).toLowerCase();return t}
+T.forEach(prep);
 const BY=Object.fromEntries(T.map(t=>[t.id,t]));
 // theme
 const theme=LS("theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
@@ -101,7 +102,7 @@ function card(t){const s=stOf(t.id);
   <div class="body"><div class="t">${esc(t.title)}</div><div class="s">${t.year||"—"} · ${esc(t.language)} · ${esc(t.genres.join(", "))}</div>${scores(t)}
   ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${t.why?`<div class="why">Matched: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
   <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div>${s==="watched"?`<div class="rate">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}" aria-pressed="${ST[t.id].rating===k}" title="${n}">${e} ${n}</button>`).join("")}</div>`:""}</div></article>`}
-function render(){tabs();if(typeof detId!=="undefined"&&detId)renderDetail();$("#rf").style.display=tab==="watched"?"":"none";const list=filtered();
+function render(){tabs();if(typeof renderMine==="function")renderMine();if(typeof detId!=="undefined"&&detId)renderDetail();$("#rf").style.display=tab==="watched"?"":"none";const list=filtered();
   $("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;
   $("#info").textContent=(vibe?`Vibe matches for “${vibe.q}”: `:"")+`${list.length} title${list.length===1?"":"s"}`;
   $("#grid").innerHTML=list.length?list.slice(0,page*PER).map(card).join(""):`<div class="empty" style="grid-column:1/-1"><b>Nothing here</b><br>Try loosening the filters.</div>`;
@@ -212,13 +213,65 @@ function authUI(){const b=$("#authBox");
   if(!sb){b.innerHTML="";sync("Offline (Supabase unavailable) – saved locally");return}
   if(user){const md=user.user_metadata||{},nm=md.full_name||md.name||"",pic=md.avatar_url||md.picture||"",ini=esc((nm||user.email||"?")[0].toUpperCase());
     b.innerHTML=`<div class="acct"><button class="btn" id="acctBtn" style="display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px"><span class="av" ${pic?`style="background-image:url('${esc(pic)}')"`:""}>${pic?"":ini}</span><span class="s" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(user.email)}</span>▾</button>
-    <div class="menu" id="acctMenu">${nm?`<b>${esc(nm)}</b><br>`:""}<span class="s">${esc(user.email)}</span><p class="hint" id="syncM">${esc($("#sync").textContent)}</p><button class="btn wide" id="out">Sign out</button></div></div>`;
+    <div class="menu" id="acctMenu">${nm?`<b>${esc(nm)}</b><br>`:""}<span class="s">${esc(user.email)}</span><p class="hint" id="syncM">${esc($("#sync").textContent)}</p><label for="dnIn" style="display:block;margin-top:8px">Display name</label><div class="row" style="gap:6px;flex-wrap:nowrap;margin:4px 0 10px"><input id="dnIn" maxlength="40" value="${esc(dispName())}"><button class="btn" id="dnSave">Save</button></div><button class="btn wide" id="out">Sign out</button></div></div>`;
+    b.insertAdjacentHTML("afterbegin",`<button class="btn acc" id="addBtn">＋ Add a title</button>`);$("#addBtn").onclick=openAdd;
+    $("#dnSave").onclick=async()=>{const v=$("#dnIn").value.trim().slice(0,40);if(!v)return toast("Enter a name");const{error}=await sb.auth.updateUser({data:{display_name:v}});toast(error?"Couldn't save name":"Display name saved")};
     $("#acctBtn").onclick=()=>$("#acctMenu").classList.toggle("open");$("#out").onclick=async()=>{await sb.auth.signOut();toast("Signed out")}}
   else{b.innerHTML=`<button class="btn acc" id="in">Sign in</button>`;sync("Saved on this device only");$("#in").onclick=()=>openAuth(false)}}
 if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;authUI();render();if(nu&&changed)setTimeout(load,0);
     if(ev==="PASSWORD_RECOVERY")setTimeout(()=>openAuth(true),0)});
   window.addEventListener("online",flush)}
 authUI();
+// ---- user-added titles ----
+function dispName(){if(!user)return"";const m=user.user_metadata||{};return(m.display_name||m.full_name||m.name||(user.email||"").split("@")[0]||"Someone").trim()}
+function mergeUT(row){const r=Object.assign({},row.record);if(!r||!r.id)return;r.source=r.source||`${row.display_name||"Someone"}'s pick`;r.addedBy=row.added_by;r.addedAt=row.created_at;
+  if(r.stream){SCACHE[r.id]=r.stream;delete r.stream}
+  if(BY[r.id]){BY[r.id].addedBy=r.addedBy;BY[r.id].addedAt=r.addedAt;return}
+  prep(r);T.push(r);BY[r.id]=r;
+  if(![...$("#lang").options].some(o=>o.value===r.language))$("#lang").insertAdjacentHTML("beforeend",`<option>${esc(r.language)}</option>`);
+  if(r.year&&r.year>+$("#y2").value&&+$("#y2").value===YMAX){$("#y2").max=$("#y2").value=r.year}}
+async function loadUserTitles(){if(!sb)return;try{const{data,error}=await sb.from("user_titles").select("id,record,display_name,added_by,created_at").order("created_at",{ascending:true});if(error)return;data.forEach(mergeUT);render()}catch(_){}}
+var PENDING=[],pk=0;
+var STEPS=["Finding the movie…","Matching it on IMDb…","Getting ratings…","Checking where to stream…","Fetching the trailer…","Almost there…"];
+function renderMine(){const box=$("#mine");if(!box)return;
+  const mine=user?T.filter(t=>t.addedBy===user.id).sort((a,b)=>(b.addedAt||"").localeCompare(a.addedAt||"")).slice(0,12):[];
+  if(!user||(!PENDING.length&&!mine.length)){box.hidden=true;return}box.hidden=false;
+  $("#mineGrid").innerHTML=PENDING.map(p=>`<article class="card pcard ${p.state}" data-pk="${p.k}"><div class="poster ${p.state==="pending"?"skel":""}"><div class="ph">${p.state==="pending"?"":p.state==="exists"?"✓":"⚠️"}</div></div><div class="body"><div class="t">${esc(p.query)}${p.year?` <span class="s">(${p.year})</span>`:""}</div>
+    ${p.state==="pending"?`<div class="s rot">${STEPS[p.step%STEPS.length]}</div>`:p.state==="exists"?`<div class="s">Already in the list</div><button class="btn" data-open="${esc(p.id)}">Open “${esc(p.title||p.query)}”</button><button class="link" data-rm="${p.k}">Dismiss</button>`
+    :`<div class="err">${esc(p.msg)}</div><div class="row" style="gap:6px"><button class="btn" data-retry="${p.k}">Retry</button><button class="btn" data-rm="${p.k}">Remove</button></div>`}</div></article>`).join("")+mine.map(card).join("")}
+setInterval(()=>{let any=false;PENDING.forEach(p=>{if(p.state==="pending"){p.step++;any=true}});if(any)document.querySelectorAll("#mineGrid .pcard.pending .rot").forEach(el=>{const p=PENDING.find(x=>x.k==el.closest(".pcard").dataset.pk);if(p)el.textContent=STEPS[Math.min(p.step,STEPS.length-1)]})},2200);
+$("#mineGrid").addEventListener("click",e=>{const o=e.target.closest("[data-open]"),r=e.target.closest("[data-rm]"),t=e.target.closest("[data-retry]");
+  if(o){openDetail(o.dataset.open);return}
+  if(r){PENDING.splice(PENDING.findIndex(p=>p.k==r.dataset.rm),1);renderMine();return}
+  if(t){const p=PENDING.find(p=>p.k==t.dataset.retry);if(p){p.state="pending";p.step=0;renderMine();submitAdd(p)}return}
+  onCardClick(e)});
+async function submitAdd(p){
+  try{const{data,error}=await sb.functions.invoke("add-title",{body:{query:p.query,year:p.year||undefined,type:p.type||undefined,language:p.language||undefined,display_name:dispName()}});
+    let d=data;
+    if(error){d=null;try{d=await error.context.json()}catch(_){}
+      if(!d||!d.status){const st=error.context&&error.context.status;p.state="error";p.msg=(!st||st===404)?"Adding titles isn't switched on yet (the add-title function isn't deployed).":"Something went wrong ("+st+"). Please retry.";renderMine();return}}
+    if(d.status==="added"){mergeUT({id:d.id,record:d.record,display_name:d.display_name,added_by:user.id,created_at:new Date().toISOString()});PENDING.splice(PENDING.indexOf(p),1);render();toast(`Added “${d.record.title}” ✓`)}
+    else if(d.status==="exists"){if(d.record)mergeUT({id:d.id,record:d.record,display_name:d.display_name,created_at:""});p.state="exists";p.id=d.id;p.title=d.title;
+      if(!BY[d.id]){p.state="error";p.msg="Already added — refresh the page to see it."}renderMine()}
+    else{p.state="error";p.msg=d.message||"Couldn't add this title.";renderMine()}
+  }catch(x){p.state="error";p.msg="Network error. Check your connection and retry.";renderMine()}}
+function addMatches(){const q=$("#addQ").value.trim(),y=+$("#addY").value||0,n=norm(q),box=$("#addM");let exact=null;
+  if(n.length<2){box.innerHTML="";$("#addGo").disabled=!n;return}
+  const hits=T.filter(t=>{const tn=norm(t.title);return tn===n||tn.includes(n)||(n.length>3&&n.includes(tn)&&tn.length>3)});
+  exact=hits.find(t=>norm(t.title)===n&&(!y||!t.year||Math.abs(t.year-y)<=1)&&(!$("#addType").value||t.type===$("#addType").value));
+  const rest=hits.filter(t=>t!==exact).slice(0,5);
+  box.innerHTML=(exact?`<div class="msg show good" style="display:block">✓ <b>Already in the list:</b> <button class="link" data-open="${exact.id}">${esc(exact.title)} (${exact.year||"—"})</button></div>`:"")+
+    (rest.length?`<div class="hint">Similar titles in the list:</div>`+rest.map(t=>`<button class="chip" data-open="${t.id}">${esc(t.title)} ${t.year?`(${t.year})`:""}</button>`).join(" "):"");
+  $("#addGo").disabled=!!exact}
+var norm=s=>(s||"").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");
+function openAdd(){if(!user)return openAuth(false);$("#addF").reset();$("#addM").innerHTML="";$("#addGo").disabled=true;$("#addDlg").showModal();$("#addQ").focus()}
+["addQ","addY","addType"].forEach(id=>$("#"+id).addEventListener("input",addMatches));
+$("#addM").addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o){$("#addDlg").close();openDetail(o.dataset.open)}});
+$("#addX").onclick=()=>$("#addDlg").close();
+$("#addF").onsubmit=e=>{e.preventDefault();const q=$("#addQ").value.trim();if(!q||$("#addGo").disabled)return;
+  const p={k:++pk,query:q,year:+$("#addY").value||null,type:$("#addType").value,language:$("#addLang").value.trim(),state:"pending",step:0};
+  PENDING.unshift(p);$("#addDlg").close();renderMine();$("#mine").scrollIntoView({behavior:"smooth",block:"start"});submitAdd(p)};
+loadUserTitles();
 $("#exp").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({exported:new Date().toISOString(),items:ST},null,1)],{type:"application/json"}));a.download="watchlist-status.json";a.click()};
 $("#impB").onclick=()=>$("#imp").click();
 $("#imp").onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());const it=j.items||j;let n=0;Object.entries(it).forEach(([id,v])=>{if(BY[id]&&v&&v.status&&(!ST[id]||(v.updatedAt||"")>(ST[id].updatedAt||""))){ST[id]=v;PEND[id]=v.status;n++}});saveST();savePend();render();flush();toast(`Imported ${n} entries`)}catch(x){toast("Invalid file")}};
