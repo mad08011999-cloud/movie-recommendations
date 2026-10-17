@@ -47,6 +47,12 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 .menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);padding:12px;min-width:220px;display:none;z-index:9}.menu.open{display:block}
 .x{position:absolute;top:12px;right:14px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--soft)}
 .scores{display:flex;gap:10px;align-items:center}.sc{display:inline-flex;align-items:center;gap:4px;font-size:12.5px}.sc svg{flex:none}
+.det{max-width:860px;width:95%;padding:22px;max-height:92vh}.dg{display:grid;grid-template-columns:260px 1fr;gap:20px}.dp{aspect-ratio:2/3;border-radius:12px;background:var(--line) center/cover;position:relative}
+.dd{font-size:14px;line-height:1.55}.di .scores{margin:6px 0}.card .poster,.card .t{cursor:pointer}.card .t:hover{color:var(--acc)}
+.ctry{border-top:1px solid var(--line);padding:10px 0}.ofr{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.oty{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--soft);min-width:96px}
+.prov{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;padding:4px 8px 4px 4px;font-size:12.5px;color:var(--ink);text-decoration:none;background:var(--bg)}.prov:hover{border-color:var(--acc)}.prov img{width:24px;height:24px;border-radius:6px}
+.jwa a{color:inherit}a.btn{text-decoration:none;color:var(--ink)}
+@media(max-width:640px){.dg{grid-template-columns:1fr}.dp{max-width:200px;margin:auto;width:100%}.det{padding:16px}}
 .empty{text-align:center;padding:50px;color:var(--soft);border:1px dashed var(--line);border-radius:14px}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:560px;width:94%}
 dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
@@ -93,6 +99,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 <div class="row" style="justify-content:space-between;margin-top:12px"><button class="link" id="forgot">Forgot password?</button><button class="link" id="magic">✉️ Email me a sign-in link</button></div></div>
 <form id="aRec" style="display:none" novalidate><h2>Set a new password</h2><p class="hint">Choose a new password for your account.</p><div class="f" style="margin-top:12px"><label for="nPw">New password</label><div class="pw"><input id="nPw" type="password" autocomplete="new-password"><button type="button" id="pwT2">Show</button></div><div class="err" id="eN"></div></div><div id="msg2" class="msg"></div><button class="btn acc wide" type="submit">Update password</button></form>
 </dialog>
+<dialog id="det" class="det" aria-label="Title details"><button class="x" id="detX" aria-label="Close">×</button><div id="detBody"></div></dialog>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script></body></html>

@@ -101,17 +101,41 @@ function card(t){const s=stOf(t.id);
   <div class="body"><div class="t">${esc(t.title)}</div><div class="s">${t.year||"—"} · ${esc(t.language)} · ${esc(t.genres.join(", "))}</div>${scores(t)}
   ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${t.why?`<div class="why">Matched: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
   <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div>${s==="watched"?`<div class="rate">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}" aria-pressed="${ST[t.id].rating===k}" title="${n}">${e} ${n}</button>`).join("")}</div>`:""}</div></article>`}
-function render(){tabs();$("#rf").style.display=tab==="watched"?"":"none";const list=filtered();
+function render(){tabs();if(typeof detId!=="undefined"&&detId)renderDetail();$("#rf").style.display=tab==="watched"?"":"none";const list=filtered();
   $("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;
   $("#info").textContent=(vibe?`Vibe matches for “${vibe.q}”: `:"")+`${list.length} title${list.length===1?"":"s"}`;
   $("#grid").innerHTML=list.length?list.slice(0,page*PER).map(card).join(""):`<div class="empty" style="grid-column:1/-1"><b>Nothing here</b><br>Try loosening the filters.</div>`;
   $("#more").style.display=list.length>page*PER?"":"none";
 }
-$("#grid").onclick=e=>{const rb=e.target.closest(".rate button");if(rb){const id=rb.closest(".card").dataset.id,r=rb.dataset.r;const o=ST[id];if(o.rating===r)delete o.rating;else o.rating=r;o.updatedAt=new Date().toISOString();PEND[id]="watched";savePend();saveST();render();flush();if(user&&o.rating&&tab!=="watched")toast("Rated — moved to bottom");return}
-const b=e.target.closest(".st button");if(b){const id=b.closest(".card").dataset.id,s=b.dataset.s;
+function onCardClick(e){const rb=e.target.closest(".rate button");if(rb){const id=rb.closest("[data-id]").dataset.id,r=rb.dataset.r;const o=ST[id];if(o.rating===r)delete o.rating;else o.rating=r;o.updatedAt=new Date().toISOString();PEND[id]="watched";savePend();saveST();render();flush();if(user&&o.rating&&tab!=="watched")toast("Rated — moved to bottom");return}
+const b=e.target.closest(".st button");if(b){const id=b.closest("[data-id]").dataset.id,s=b.dataset.s;
     if(stOf(id)===s)delete ST[id];else ST[id]={status:s,title:BY[id].title,updatedAt:new Date().toISOString()};
     PEND[id]=ST[id]?ST[id].status:"none";savePend();saveST();render();flush();if(s==="todo"&&ST[id]&&user&&tab!=="watched")toast("Added to top of your list");else if(s==="watched"&&ST[id])toast(`“${BY[id].title}” added to Watched`);return}
-  const d=e.target.closest(".d");if(d)d.classList.toggle("open")};
+  const op=e.target.closest(".card .poster, .card .t");if(op){openDetail(op.closest("[data-id]").dataset.id);return}
+  const d=e.target.closest(".d");if(d)d.classList.toggle("open")}
+$("#grid").onclick=onCardClick;$("#detBody").onclick=onCardClick;
+const CN={US:"🇺🇸 United States",GB:"🇬🇧 United Kingdom",CA:"🇨🇦 Canada",IN:"🇮🇳 India",AU:"🇦🇺 Australia",FR:"🇫🇷 France"};
+const TY={subscription:"Stream",free:"Free",ads:"Free with ads",rent:"Rent",buy:"Buy"};
+const SCACHE={};let detId=null;
+async function getStream(id){if(!(id in SCACHE)){try{const r=await fetch("streaming/"+id+".json");SCACHE[id]=r.ok?await r.json():false}catch(_){SCACHE[id]=false}}return SCACHE[id]}
+function openDetail(id){detId=id;renderDetail();if(!$("#det").open)$("#det").showModal();$("#det").scrollTop=0;getStream(id).then(()=>{if(detId===id)renderDetail()})}
+function renderDetail(){const t=BY[detId];if(!t)return;const s=stOf(t.id),STREAM=(t.id in SCACHE)?1:null,x=SCACHE[t.id]||null;
+  const meta=[t.year,t.type==="series"?"Series":"Movie",x&&x.seasons?`${x.seasons} season${x.seasons>1?"s":""}`:"",x&&x.runtime?(t.type==="series"?`~${x.runtime} min/ep`:`${Math.floor(x.runtime/60)}h ${x.runtime%60}m`):"",t.language].filter(Boolean).map(esc).join(" · ");
+  const ctl=`<div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div>${s==="watched"?`<div class="rate" style="margin-top:6px">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}">${e} ${n}</button>`).join("")}</div>`:""}`;
+  let sv;
+  if(!STREAM)sv=`<p class="hint">Loading streaming availability…</p>`;
+  else if(!x||!Object.keys(x.c||{}).length)sv=`<p class="hint">No streaming offers found in ${Object.keys(CN).length} tracked countries.${x&&x.jw?` <a href="${esc(x.jw)}" target="_blank" rel="noopener">Check JustWatch</a>`:""}</p>`;
+  else sv=Object.keys(CN).filter(c=>x.c[c]).map(c=>{const g={};x.c[c].forEach(o=>(g[o.t]=g[o.t]||[]).push(o));
+    return `<div class="ctry"><b>${CN[c]}</b>${Object.keys(TY).filter(k=>g[k]).map(k=>`<div class="ofr"><span class="oty">${TY[k]}</span>${g[k].map(o=>`<a class="prov" href="${esc(o.u||x.jw)}" target="_blank" rel="noopener" title="${esc(o.p)}">${o.i?`<img src="${esc(o.i)}" alt="" loading="lazy">`:""}<span>${esc(o.p)}</span></a>`).join("")}</div>`).join("")}</div>`}).join("")+`<p class="hint">Not listed: ${Object.keys(CN).filter(c=>!x.c[c]).join(", ")||"—"}</p>`;
+  $("#detBody").innerHTML=`<div class="dg" data-id="${t.id}"><div class="dp" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}</div>
+  <div class="di"><h2 style="margin:0 0 4px">${esc(t.title)}</h2><div class="s">${meta}</div><div class="s" style="margin:6px 0">${esc(t.genres.join(" · "))}</div>${scores(t)}
+  ${x&&x.director&&x.director.length?`<p class="s"><b>Director:</b> ${esc(x.director.join(", "))}</p>`:""}${x&&x.cast&&x.cast.length?`<p class="s"><b>Cast:</b> ${esc(x.cast.join(", "))}</p>`:""}
+  ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}<p class="dd">${esc(t.desc||"No description available.")}</p>${ctl}
+  <div class="row" style="margin-top:12px"><a class="btn" href="https://www.imdb.com/title/${t.id}/" target="_blank" rel="noopener">IMDb page ↗</a><a class="btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(t.title+" "+(t.year||"")+" official trailer")}" target="_blank" rel="noopener">▶ Trailer</a>${x&&x.jw?`<a class="btn" href="${esc(x.jw)}" target="_blank" rel="noopener">JustWatch ↗</a>`:""}</div></div></div>
+  <h3>Where to watch</h3>${sv}<p class="hint jwa">Streaming data provided by <a href="https://www.justwatch.com" target="_blank" rel="noopener"><b>JustWatch</b></a>${x&&x.u?` · updated ${esc(x.u)}`:""}</p>`}
+$("#detX").onclick=()=>$("#det").close();$("#det").addEventListener("close",()=>detId=null);
+$("#det").addEventListener("click",e=>{if(e.target.id==="det")$("#det").close()});
+
 // ---- settings / sync ----
 $("#setBtn").onclick=()=>{$("#aiBase").value=LS("aiBase")||"";$("#aiModel").value=LS("aiModel")||"";$("#aiKey").value=ai().key;$("#dlg").showModal()};
 $("#save").onclick=()=>{["aiBase","aiModel","aiKey"].forEach(k=>{const v=$("#"+k).value.trim();v?SET(k,v):localStorage.removeItem(k)});aiNote();$("#dlg").close();toast("Settings saved in this browser")};
