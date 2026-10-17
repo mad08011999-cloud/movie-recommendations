@@ -48,7 +48,7 @@ function localRank(q){
       else if(st.length>2&&new RegExp("\\b"+st.replace(/[-]/g,"\\-")).test(t.blob)){sc+=wt;hit.push(term)}
       else if(term===t.language.toLowerCase()){sc+=wt*2;hit.push(term)}});
     if(wantType&&t.type!==wantType)sc*=.3;
-    if(sc>0){sc+=(t.rating||5)*.15+Math.log1p(t.saves||0)*.1;res.push({id:t.id,sc,why:[...new Set(hit)].slice(0,4).join(", ")})}});
+    if(sc>0){sc+=(t.imdbRating||5)*.15+Math.log1p(t.saves||0)*.1;res.push({id:t.id,sc,why:[...new Set(hit)].slice(0,4).join(", ")})}});
   return res.sort((a,b)=>b.sc-a.sc);
 }
 const ai=()=>({base:(LS("aiBase")||"https://api.openai.com/v1").replace(/\/$/,""),model:LS("aiModel")||"gpt-4o-mini",key:LS("aiKey")||""});
@@ -85,13 +85,19 @@ function filtered(){
   const rf=$("#rf").value,q=$("#q").value.trim().toLowerCase(),ty=$("#type").value,lg=$("#lang").value,y1=+$("#y1").value||0,y2=+$("#y2").value||9999;
   let list=vibe?vibe.res.map(r=>Object.assign({},BY[r.id],{why:r.why})):T.slice();
   list=list.filter(t=>(!q||t.blob.includes(q))&&(ty==="all"||t.type===ty)&&(lg==="all"||t.language===lg)&&(!t.year||(t.year>=y1&&t.year<=y2))&&[...selG].every(g=>t.genres.includes(g))&&(tab==="all"||stOf(t.id)===tab)&&(tab!=="watched"||rf==="all"||(ST[t.id]?.rating||"none")===rf));
-  if(!vibe){const s=$("#sort").value,f={saves:(a,b)=>(b.saves||0)-(a.saves||0),rating:(a,b)=>(b.rating||0)-(a.rating||0),new:(a,b)=>(b.year||0)-(a.year||0),old:(a,b)=>(a.year||9999)-(b.year||9999),az:(a,b)=>a.title.localeCompare(b.title)}[s];list.sort(f)}
+  if(!vibe){const s=$("#sort").value,f={saves:(a,b)=>(b.saves||0)-(a.saves||0),rating:(a,b)=>(b.imdbRating||0)-(a.imdbRating||0),rt:(a,b)=>(b.rtScore??-1)-(a.rtScore??-1),new:(a,b)=>(b.year||0)-(a.year||0),old:(a,b)=>(a.year||9999)-(b.year||9999),az:(a,b)=>a.title.localeCompare(b.title)}[s];list.sort(f)}
   return list;
 }
+const IMDB_SVG='<svg viewBox="0 0 64 32" width="34" height="17" aria-hidden="true"><rect width="64" height="32" rx="5" fill="#F5C518"/><text x="32" y="23" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="17" fill="#000">IMDb</text></svg>';
+const RT_FRESH='<svg viewBox="0 0 32 32" width="17" height="17" aria-hidden="true"><path d="M16 9c7 0 12 4.5 12 10.5S23 30 16 30 4 26 4 19.5 9 9 16 9z" fill="#FA320A"/><path d="M12 4c2 1 3 3 4 5 1-2 3-3.5 6-3.5-1.5 1.5-3 3-5 4-2.5.2-4.5 0-7-1 1-.6 2-1.2 2-3.5z" fill="#00912D"/></svg>';
+const RT_ROT='<svg viewBox="0 0 32 32" width="17" height="17" aria-hidden="true"><path d="M16 5l2.5 6 6-3-2 6.5 6.5 1.5-6 3.5 4 5.5-6.5-1-1 6.5-3.5-5.5-3.5 5.5-1-6.5-6.5 1 4-5.5-6-3.5 6.5-1.5-2-6.5 6 3z" fill="#0AC855"/></svg>';
+function scores(t){const i=t.imdbRating!=null?`<span class="sc" title="IMDb rating">${IMDB_SVG}<b>${t.imdbRating.toFixed(1)}</b></span>`:"",
+  r=t.rtScore!=null?`<span class="sc" title="Rotten Tomatoes Tomatometer: ${t.rtScore>=60?"Fresh":"Rotten"}">${t.rtScore>=60?RT_FRESH:RT_ROT}<b>${t.rtScore}%</b></span>`:"";
+  return i||r?`<div class="scores">${i}${r}</div>`:""}
 const RT={dislike:["👎","Not for me"],like:["👍","Like"],love:["👍👍","Love it!!"]};
 function card(t){const s=stOf(t.id);
-  return `<article class="card" data-id="${t.id}"><div class="poster" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}<span class="badge">${t.type}</span>${t.rating?`<span class="badge rt">★ ${t.rating}</span>`:""}${s==="watched"&&ST[t.id].rating?`<span class="badge rb">${RT[ST[t.id].rating][0]} ${RT[ST[t.id].rating][1]}</span>`:""}</div>
-  <div class="body"><div class="t">${esc(t.title)}</div><div class="s">${t.year||"—"} · ${esc(t.language)} · ${esc(t.genres.join(", "))}</div>
+  return `<article class="card" data-id="${t.id}"><div class="poster" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}<span class="badge">${t.type}</span>${s==="watched"&&ST[t.id].rating?`<span class="badge rb">${RT[ST[t.id].rating][0]} ${RT[ST[t.id].rating][1]}</span>`:""}</div>
+  <div class="body"><div class="t">${esc(t.title)}</div><div class="s">${t.year||"—"} · ${esc(t.language)} · ${esc(t.genres.join(", "))}</div>${scores(t)}
   ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${t.why?`<div class="why">Matched: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
   <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div>${s==="watched"?`<div class="rate">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}" aria-pressed="${ST[t.id].rating===k}" title="${n}">${e} ${n}</button>`).join("")}</div>`:""}</div></article>`}
 function render(){tabs();$("#rf").style.display=tab==="watched"?"":"none";const list=filtered();
