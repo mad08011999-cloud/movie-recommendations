@@ -2,7 +2,7 @@
 "use strict";
 const $=s=>document.querySelector(s), LS=k=>localStorage.getItem(k), SET=(k,v)=>localStorage.setItem(k,v);
 const DEF_REPO="mad08011999-cloud/movie-recommendations";
-const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2600)};
+const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.remove("click");t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2600)};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const T=await (await fetch("catalog.json")).json();
 function prep(t){t.genres=t.genres||[];t.language=t.language||"Unknown";t.desc=t.desc||"";t.blob=(t.title+" "+(t.source||"")+" "+t.genres.join(" ")+" "+t.desc+" "+t.type+" "+t.language).toLowerCase();return t}
@@ -223,9 +223,12 @@ if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(
   window.addEventListener("online",flush)}
 authUI();
 // ---- user-added titles ----
+function toastOpen(m,id){const t=$("#toast");t.innerHTML=`${esc(m)} <button class="link tl" data-open="${esc(id)}">Open</button>`;t.classList.add("show","click");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show","click"),6000)}
+$("#toast").addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o){$("#toast").classList.remove("show","click");openDetail(o.dataset.open)}});
 function dispName(){if(!user)return"";const m=user.user_metadata||{};return(m.display_name||m.full_name||m.name||(user.email||"").split("@")[0]||"Someone").trim()}
 function mergeUT(row){const r=Object.assign({},row.record);if(!r||!r.id)return;r.source=r.source||`${row.display_name||"Someone"}'s pick`;r.addedBy=row.added_by;r.addedAt=row.created_at;
   if(r.stream){SCACHE[r.id]=r.stream;delete r.stream}
+  if(r.language)r.language=String(r.language).replace(/\b\w/g,c=>c.toUpperCase());
   if(BY[r.id]){BY[r.id].addedBy=r.addedBy;BY[r.id].addedAt=r.addedAt;return}
   prep(r);T.push(r);BY[r.id]=r;
   if(![...$("#lang").options].some(o=>o.value===r.language))$("#lang").insertAdjacentHTML("beforeend",`<option>${esc(r.language)}</option>`);
@@ -234,7 +237,7 @@ async function loadUserTitles(){if(!sb)return;try{const{data,error}=await sb.fro
 var PENDING=[],pk=0;
 var STEPS=["Finding the movie…","Matching it on IMDb…","Getting ratings…","Checking where to stream…","Fetching the trailer…","Almost there…"];
 function renderMine(){const box=$("#mine");if(!box)return;
-  const mine=user?T.filter(t=>t.addedBy===user.id).sort((a,b)=>(b.addedAt||"").localeCompare(a.addedAt||"")).slice(0,12):[];
+  const mine=[];
   if(!user||(!PENDING.length&&!mine.length)){box.hidden=true;return}box.hidden=false;
   $("#mineGrid").innerHTML=PENDING.map(p=>`<article class="card pcard ${p.state}" data-pk="${p.k}"><div class="poster ${p.state==="pending"?"skel":""}"><div class="ph">${p.state==="pending"?"":p.state==="exists"?"✓":"⚠️"}</div></div><div class="body"><div class="t">${esc(p.query)}${p.year?` <span class="s">(${p.year})</span>`:""}</div>
     ${p.state==="pending"?`<div class="s rot">${STEPS[p.step%STEPS.length]}</div>`:p.state==="exists"?`<div class="s">Already in the list</div><button class="btn" data-open="${esc(p.id)}">Open “${esc(p.title||p.query)}”</button><button class="link" data-rm="${p.k}">Dismiss</button>`
@@ -250,7 +253,7 @@ async function submitAdd(p){
     let d=data;
     if(error){d=null;try{d=await error.context.json()}catch(_){}
       if(!d||!d.status){const st=error.context&&error.context.status;p.state="error";p.msg=(!st||st===404)?"Adding titles isn't switched on yet (the add-title function isn't deployed).":"Something went wrong ("+st+"). Please retry.";renderMine();return}}
-    if(d.status==="added"){mergeUT({id:d.id,record:d.record,display_name:d.display_name,added_by:user.id,created_at:new Date().toISOString()});PENDING.splice(PENDING.indexOf(p),1);render();toast(`Added “${d.record.title}” ✓`)}
+    if(d.status==="added"){mergeUT({id:d.id,record:d.record,display_name:d.display_name,added_by:user.id,created_at:new Date().toISOString()});PENDING.splice(PENDING.indexOf(p),1);render();toastOpen(`Added “${d.record.title}” to the list`,d.id)}
     else if(d.status==="exists"){if(d.record)mergeUT({id:d.id,record:d.record,display_name:d.display_name,created_at:""});p.state="exists";p.id=d.id;p.title=d.title;
       if(!BY[d.id]){p.state="error";p.msg="Already added — refresh the page to see it."}renderMine()}
     else{p.state="error";p.msg=d.message||"Couldn't add this title.";renderMine()}

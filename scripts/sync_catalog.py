@@ -129,7 +129,7 @@ def fold_user_titles(cat):
         if not rid or rid in have or not re.fullmatch(r"tt\d{6,10}", rid): continue
         st = rec.pop("stream", None)
         rec = {k: rec.get(k) for k in FIELDS} | {"source": rec.get("source") or f"{row.get('display_name') or 'Someone'}'s pick"}
-        rec["id"] = rid; rec["genres"] = rec["genres"] or []; rec["saves"] = rec["saves"] or 0; rec["desc"] = rec["desc"] or ""
+        rec["id"] = rid; rec["language"] = rec["language"].title() if rec.get("language") else None; rec["genres"] = rec["genres"] or []; rec["saves"] = rec["saves"] or 0; rec["desc"] = rec["desc"] or ""
         if st and not os.path.exists(f"streaming/{rid}.json"):
             os.makedirs("streaming", exist_ok=True); json.dump(st, open(f"streaming/{rid}.json", "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
         cat.append(rec); have.add(rid); n += 1
