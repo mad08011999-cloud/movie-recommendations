@@ -131,8 +131,15 @@ function renderDetail(){const t=BY[detId];if(!t)return;const s=stOf(t.id),STREAM
   <div class="di"><h2 style="margin:0 0 4px">${esc(t.title)}</h2><div class="s">${meta}</div><div class="s" style="margin:6px 0">${esc(t.genres.join(" · "))}</div>${scores(t)}
   ${x&&x.director&&x.director.length?`<p class="s"><b>Director:</b> ${esc(x.director.join(", "))}</p>`:""}${x&&x.cast&&x.cast.length?`<p class="s"><b>Cast:</b> ${esc(x.cast.join(", "))}</p>`:""}
   ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}<p class="dd">${esc(t.desc||"No description available.")}</p>${ctl}
-  <div class="row" style="margin-top:12px"><a class="btn" href="https://www.imdb.com/title/${t.id}/" target="_blank" rel="noopener">IMDb page ↗</a><a class="btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(t.title+" "+(t.year||"")+" official trailer")}" target="_blank" rel="noopener">▶ Trailer</a>${x&&x.jw?`<a class="btn" href="${esc(x.jw)}" target="_blank" rel="noopener">JustWatch ↗</a>`:""}</div></div></div>
+  <div class="row" style="margin-top:12px"><a class="btn" href="https://www.imdb.com/title/${t.id}/" target="_blank" rel="noopener">IMDb page ↗</a>${x&&x.trailer?`<button class="btn acc" id="trBtn" type="button">▶ Trailer</button>`:`<a class="btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(t.title+" "+(t.year||"")+" official trailer")}" target="_blank" rel="noopener">▶ Trailer (YouTube search)</a>`}${x&&x.jw?`<a class="btn" href="${esc(x.jw)}" target="_blank" rel="noopener">JustWatch ↗</a>`:""}</div></div></div>
   <h3>Where to watch</h3>${sv}<p class="hint jwa">Streaming data provided by <a href="https://www.justwatch.com" target="_blank" rel="noopener"><b>JustWatch</b></a>${x&&x.u?` · updated ${esc(x.u)}`:""}</p>`}
+function openTrailer(tr,title){const p=$("#mini");p.querySelector(".mv").innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(tr.id)}?autoplay=1&rel=0&modestbranding=1&playsinline=1" title="${esc(title)} trailer" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+  p.querySelector(".mc").innerHTML=`<b>${esc(title)}</b> · <span>${tr.off?"✓ ":""}${esc(tr.ch||"YouTube")}</span>`;p.hidden=false}
+function closeTrailer(){const p=$("#mini");if(p.hidden)return false;p.querySelector(".mv").innerHTML="";p.hidden=true;return true}
+$("#miniX").onclick=closeTrailer;
+$("#det").addEventListener("cancel",e=>{if(closeTrailer())e.preventDefault()});
+$("#det").addEventListener("close",closeTrailer);
+document.addEventListener("click",e=>{if(e.target.id==="trBtn"){const x=SCACHE[detId];if(x&&x.trailer)openTrailer(x.trailer,BY[detId].title)}});
 $("#detX").onclick=()=>$("#det").close();$("#det").addEventListener("close",()=>detId=null);
 $("#det").addEventListener("click",e=>{if(e.target.id==="det")$("#det").close()});
 

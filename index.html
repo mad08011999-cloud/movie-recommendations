@@ -53,6 +53,10 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 .prov{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;padding:4px 8px 4px 4px;font-size:12.5px;color:var(--ink);text-decoration:none;background:var(--bg)}.prov:hover{border-color:var(--acc)}.prov img{width:24px;height:24px;border-radius:6px}
 .jwa a{color:inherit}a.btn{text-decoration:none;color:var(--ink)}
 @media(max-width:640px){.dg{grid-template-columns:1fr}.dp{max-width:200px;margin:auto;width:100%}.det{padding:16px}}
+.mini{position:fixed;right:18px;bottom:18px;width:min(440px,calc(100vw - 36px));background:#000;border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5);z-index:50}
+.mini .mv{aspect-ratio:16/9}.mini iframe{width:100%;height:100%;border:0;display:block}.mini .mc{color:#ddd;font-size:12px;padding:7px 36px 8px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .mx{top:auto;bottom:2px;right:6px;color:#fff;font-size:22px;z-index:2}
+@media(max-width:640px){.mini{left:0;right:0;bottom:0;width:100%;border-radius:12px 12px 0 0}}
 .empty{text-align:center;padding:50px;color:var(--soft);border:1px dashed var(--line);border-radius:14px}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:560px;width:94%}
 dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
@@ -99,7 +103,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 <div class="row" style="justify-content:space-between;margin-top:12px"><button class="link" id="forgot">Forgot password?</button><button class="link" id="magic">✉️ Email me a sign-in link</button></div></div>
 <form id="aRec" style="display:none" novalidate><h2>Set a new password</h2><p class="hint">Choose a new password for your account.</p><div class="f" style="margin-top:12px"><label for="nPw">New password</label><div class="pw"><input id="nPw" type="password" autocomplete="new-password"><button type="button" id="pwT2">Show</button></div><div class="err" id="eN"></div></div><div id="msg2" class="msg"></div><button class="btn acc wide" type="submit">Update password</button></form>
 </dialog>
-<dialog id="det" class="det" aria-label="Title details"><button class="x" id="detX" aria-label="Close">×</button><div id="detBody"></div></dialog>
+<dialog id="det" class="det" aria-label="Title details"><button class="x" id="detX" aria-label="Close">×</button><div id="detBody"></div><div id="mini" class="mini" hidden><button class="x mx" id="miniX" aria-label="Close trailer">×</button><div class="mv"></div><div class="mc"></div></div></dialog>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script></body></html>

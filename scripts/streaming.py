@@ -90,6 +90,8 @@ def main():
         if rec is None:
             if jw_down and not TMDB_KEY: break
             continue
+        for k in ("trailer", "trailerTried"):
+            if k in T.get(t["id"], {}): rec[k] = T[t["id"]][k]
         rec["u"] = datetime.date.today().isoformat(); T[t["id"]] = rec; ok += 1
         json.dump(rec, open(os.path.join(DIR, t["id"] + ".json"), "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
         if i % 100 == 0: print(f"  {i}/{len(order)}")
