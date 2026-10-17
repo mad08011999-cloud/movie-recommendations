@@ -86,7 +86,7 @@ function filtered(){
   let list=vibe?vibe.res.map(r=>Object.assign({},BY[r.id],{why:r.why})):T.slice();
   list=list.filter(t=>(!q||t.blob.includes(q))&&(ty==="all"||t.type===ty)&&(lg==="all"||t.language===lg)&&(!t.year||(t.year>=y1&&t.year<=y2))&&[...selG].every(g=>t.genres.includes(g))&&(tab==="all"||stOf(t.id)===tab)&&(tab!=="watched"||rf==="all"||(ST[t.id]?.rating||"none")===rf));
   if(!vibe){const s=$("#sort").value,f={saves:(a,b)=>(b.saves||0)-(a.saves||0),rating:(a,b)=>(b.imdbRating||0)-(a.imdbRating||0),rt:(a,b)=>(b.rtScore??-1)-(a.rtScore??-1),new:(a,b)=>(b.year||0)-(a.year||0),old:(a,b)=>(a.year||9999)-(b.year||9999),az:(a,b)=>a.title.localeCompare(b.title)}[s];list.sort(f)}
-  if(typeof user!=="undefined"&&user&&tab!=="watched"){const top=[],sunk=[];list.forEach(t=>(stOf(t.id)==="watched"&&ST[t.id]&&ST[t.id].rating?sunk:top).push(t));list=top.concat(sunk)}
+  if(typeof user!=="undefined"&&user&&tab!=="watched"){const todo=[],mid=[],sunk=[];list.forEach(t=>{const s=stOf(t.id);(s==="todo"?todo:s==="watched"&&ST[t.id]&&ST[t.id].rating?sunk:mid).push(t)});list=todo.concat(mid,sunk)}
   return list;
 }
 const IMDB_SVG='<svg viewBox="0 0 64 32" width="34" height="17" aria-hidden="true"><rect width="64" height="32" rx="5" fill="#F5C518"/><text x="32" y="23" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="17" fill="#000">IMDb</text></svg>';
@@ -110,7 +110,7 @@ function render(){tabs();$("#rf").style.display=tab==="watched"?"":"none";const 
 $("#grid").onclick=e=>{const rb=e.target.closest(".rate button");if(rb){const id=rb.closest(".card").dataset.id,r=rb.dataset.r;const o=ST[id];if(o.rating===r)delete o.rating;else o.rating=r;o.updatedAt=new Date().toISOString();PEND[id]="watched";savePend();saveST();render();flush();if(user&&o.rating&&tab!=="watched")toast("Rated — moved to bottom");return}
 const b=e.target.closest(".st button");if(b){const id=b.closest(".card").dataset.id,s=b.dataset.s;
     if(stOf(id)===s)delete ST[id];else ST[id]={status:s,title:BY[id].title,updatedAt:new Date().toISOString()};
-    PEND[id]=ST[id]?ST[id].status:"none";savePend();saveST();render();flush();if(s==="watched"&&ST[id])toast(`“${BY[id].title}” added to Watched`);return}
+    PEND[id]=ST[id]?ST[id].status:"none";savePend();saveST();render();flush();if(s==="todo"&&ST[id]&&user&&tab!=="watched")toast("Added to top of your list");else if(s==="watched"&&ST[id])toast(`“${BY[id].title}” added to Watched`);return}
   const d=e.target.closest(".d");if(d)d.classList.toggle("open")};
 // ---- settings / sync ----
 $("#setBtn").onclick=()=>{$("#aiBase").value=LS("aiBase")||"";$("#aiModel").value=LS("aiModel")||"";$("#aiKey").value=ai().key;$("#dlg").showModal()};
