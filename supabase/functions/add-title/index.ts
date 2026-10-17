@@ -1,6 +1,10 @@
 // Supabase Edge Function: add-title
-// POST { query: string, year?: number, type?: "movie"|"series", language?: string, display_name?: string }
-// Header: Authorization: Bearer <user access token>  (signed-in users only)
+// POST JSON, Authorization: Bearer <user access token>
+//   { action: "ping" }                                         -> { status:"ok", version:2 }  (no auth needed)
+//   { action: "search", query, year?, type?, language? }      -> { status:"candidates", candidates:[{id,title,year,type,poster,cast,exists}] } (saves nothing)
+//   { action: "add", id: "tt…", language?, display_name? }    -> { status:"added"|"exists"|"not_found"|"error", ... }
+//   { action: "remove", id: "tt…" }                           -> { status:"removed" } | 403 if not the caller's pick / base catalog
+//   legacy (no action): { query, year?, type?, language? }    -> resolve + add (v1 behaviour)
 // Resolves the title on IMDb, dedupes against the site catalog + public.user_titles, enriches it
 // (Wikidata, Wikipedia, JustWatch streaming, YouTube trailer, RT/IMDb ratings) and inserts into public.user_titles.
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -189,32 +193,77 @@ async function catalogIds() {
 }
 
 // ---------- handler ----------
+const TYPE_OF = (qid?: string) => (["tvSeries", "tvMiniSeries"].includes(qid || "") ? "series" : "movie");
+export async function candidates(query: string, year?: number, type?: string) {
+  const name = query.trim();
+  const want = type === "movie" ? ["movie", "tvMovie"] : type === "series" ? ["tvSeries", "tvMiniSeries"] : ["movie", "tvMovie", "tvSeries", "tvMiniSeries"];
+  let c = /^tt\d{6,10}$/.test(name) ? (await suggest(name)).filter((x) => x.id === name)
+    : (await suggest(`${name} ${year || ""}`.trim())).filter((x) => want.includes(x.qid));
+  if (year && !/^tt/.test(name)) { const y = c.filter((x) => x.y && Math.abs(x.y - year) <= 1); if (y.length) c = y; }
+  c.sort((a, b) => Number(norm(b.l) === norm(name)) - Number(norm(a.l) === norm(name)));
+  return c.slice(0, 5).map((x) => ({ id: x.id, title: x.l, year: x.y || null, type: TYPE_OF(x.qid), poster: x.i?.imageUrl || null, cast: x.s || "" }));
+}
+
 async function handle(req: Request) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ status: "error", message: "POST only" }, 405);
   const url = Deno.env.get("SUPABASE_URL")!, anon = Deno.env.get("SUPABASE_ANON_KEY")!, service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  let body: Rec;
+  try { body = await req.json(); } catch { return json({ status: "error", message: "Invalid request." }, 400); }
+  const action = ["search", "add", "remove", "ping"].includes(body.action) ? body.action : "legacy";
+  if (action === "ping") return json({ status: "ok", version: 2, actions: ["search", "add", "remove"] });
+
   const auth = req.headers.get("Authorization") || "";
   const userClient = createClient(url, anon, { global: { headers: { Authorization: auth } } });
   const { data: { user } } = await userClient.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
   if (!user) return json({ status: "error", message: "Please sign in to add titles." }, 401);
+  const db = createClient(url, service);
 
-  let body: Rec;
-  try { body = await req.json(); } catch { return json({ status: "error", message: "Invalid request." }, 400); }
-  const query = String(body.query || "").trim().slice(0, 200);
-  if (!query) return json({ status: "error", message: "Enter a title." }, 400);
   const year = body.year ? parseInt(body.year) : undefined;
   const type = ["movie", "series"].includes(body.type) ? body.type : undefined;
   const language = body.language ? String(body.language).slice(0, 60) : undefined;
   const md = user.user_metadata || {};
   const name = String(body.display_name || md.display_name || md.full_name || md.name || (user.email || "Someone").split("@")[0]).trim().slice(0, 40);
 
-  const db = createClient(url, service);
+  // ---- remove: only the user's own pick ----
+  if (action === "remove") {
+    const id = String(body.id || "");
+    if (!/^tt\d{6,10}$/.test(id)) return json({ status: "error", message: "Invalid id." }, 400);
+    const { data: row } = await db.from("user_titles").select("id,added_by").eq("id", id).maybeSingle();
+    if (!row) return json({ status: "error", message: (await catalogIds()).has(id) ? "Titles from the original list can't be removed." : "Not found." }, (await catalogIds()).has(id) ? 403 : 404);
+    if (row.added_by !== user.id) return json({ status: "error", message: "You can only remove titles you added." }, 403);
+    const { error } = await db.from("user_titles").delete().eq("id", id).eq("added_by", user.id);
+    if (error) return json({ status: "error", message: "Couldn't remove: " + error.message }, 500);
+    return json({ status: "removed", id });
+  }
+
+  // ---- search: candidates only, nothing saved ----
+  if (action === "search") {
+    const query = String(body.query || "").trim().slice(0, 200);
+    if (!query) return json({ status: "error", message: "Enter a title." }, 400);
+    const list = await candidates(query, year, type);
+    if (!list.length) return json({ status: "not_found", message: `Couldn't find “${query}”${year ? ` (${year})` : ""} on IMDb. Check the spelling or add the year.` });
+    const cat = await catalogIds();
+    const { data: rows } = await db.from("user_titles").select("id").in("id", list.map((c) => c.id));
+    const ut = new Set((rows || []).map((r: any) => r.id));
+    return json({ status: "candidates", candidates: list.map((c) => ({ ...c, exists: cat.has(c.id) || ut.has(c.id) })) });
+  }
+
+  // ---- add (by chosen id) / legacy (by query) ----
   const since = new Date(Date.now() - 86400_000).toISOString();
   const { count } = await db.from("user_titles").select("id", { count: "exact", head: true }).eq("added_by", user.id).gte("created_at", since);
   if ((count || 0) >= DAILY_LIMIT) return json({ status: "error", message: `Daily limit reached (${DAILY_LIMIT} titles). Try again tomorrow.` }, 429);
-
-  const x = await resolve(query, year, type);
-  if (!x) return json({ status: "not_found", message: `Couldn't find “${query}”${year ? ` (${year})` : ""} on IMDb. Check the spelling or add the year.` });
+  let x: any = null;
+  if (action === "add") {
+    const id = String(body.id || "");
+    if (!/^tt\d{6,10}$/.test(id)) return json({ status: "error", message: "Invalid id." }, 400);
+    x = (await suggest(id)).find((s) => s.id === id) || null;
+  } else {
+    const query = String(body.query || "").trim().slice(0, 200);
+    if (!query) return json({ status: "error", message: "Enter a title." }, 400);
+    x = await resolve(query, year, type);
+  }
+  if (!x) return json({ status: "not_found", message: "Couldn't find that title on IMDb." });
   if ((await catalogIds()).has(x.id)) return json({ status: "exists", id: x.id, title: x.l, year: x.y });
   const { data: dup } = await db.from("user_titles").select("id,record,display_name").eq("id", x.id).maybeSingle();
   if (dup) return json({ status: "exists", id: x.id, title: x.l, year: x.y, record: dup.record, display_name: dup.display_name });

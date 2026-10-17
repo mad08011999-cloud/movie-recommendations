@@ -119,16 +119,23 @@ SB_URL = "https://mazrqepjgdtdraxpcptk.supabase.co"; SB_KEY = "sb_publishable_-2
 def fold_user_titles(cat):
     """Copy titles users added via the add-title Edge Function (public.user_titles) into catalog.json + streaming/."""
     try:
-        r = urllib.request.urlopen(urllib.request.Request(SB_URL + "/rest/v1/user_titles?select=id,record,display_name&order=created_at.asc",
+        r = urllib.request.urlopen(urllib.request.Request(SB_URL + "/rest/v1/user_titles?select=id,record,display_name,added_by&order=created_at.asc",
                                    headers={"apikey": SB_KEY, **UA}), timeout=30)
         rows = json.load(r)
     except Exception as e: print("user_titles not available:", e); return 0
+    live = {row.get("id") for row in rows}
+    gone = [c for c in cat if c.get("userPick") and c["id"] not in live]
+    for c in gone:  # removed by the user who added it
+        cat.remove(c)
+        if os.path.exists(f"streaming/{c['id']}.json"): os.remove(f"streaming/{c['id']}.json")
+    if gone: print("user-removed titles dropped:", [c["id"] for c in gone])
     have = {c["id"] for c in cat}; n = 0
     for row in rows:
         rec = dict(row.get("record") or {}); rid = row.get("id")
         if not rid or rid in have or not re.fullmatch(r"tt\d{6,10}", rid): continue
         st = rec.pop("stream", None)
         rec = {k: rec.get(k) for k in FIELDS} | {"source": rec.get("source") or f"{row.get('display_name') or 'Someone'}'s pick"}
+        rec["userPick"] = True; rec["addedBy"] = row.get("added_by")
         rec["id"] = rid; rec["language"] = rec["language"].title() if rec.get("language") else None; rec["genres"] = rec["genres"] or []; rec["saves"] = rec["saves"] or 0; rec["desc"] = rec["desc"] or ""
         if st and not os.path.exists(f"streaming/{rid}.json"):
             os.makedirs("streaming", exist_ok=True); json.dump(st, open(f"streaming/{rid}.json", "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)

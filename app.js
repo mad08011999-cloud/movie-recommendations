@@ -100,7 +100,7 @@ const RT={dislike:["👎","Not for me"],like:["👍","Like"],love:["👍👍","L
 function card(t){const s=stOf(t.id);
   return `<article class="card" data-id="${t.id}"><div class="poster" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}<span class="badge">${t.type}</span>${s==="watched"&&ST[t.id].rating?`<span class="badge rb">${RT[ST[t.id].rating][0]} ${RT[ST[t.id].rating][1]}</span>`:""}</div>
   <div class="body"><div class="t">${esc(t.title)}</div><div class="s">${t.year||"—"} · ${esc(t.language)} · ${esc(t.genres.join(", "))}</div>${scores(t)}
-  ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${t.why?`<div class="why">Matched: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
+  ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${own(t)?`<button class="link rmp" data-rmpick="${t.id}">Remove my pick</button>`:""}${t.why?`<div class="why">Matched: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
   <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div>${s==="watched"?`<div class="rate">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}" aria-pressed="${ST[t.id].rating===k}" title="${n}">${e} ${n}</button>`).join("")}</div>`:""}</div></article>`}
 function render(){tabs();if(typeof renderMine==="function")renderMine();if(typeof detId!=="undefined"&&detId)renderDetail();$("#rf").style.display=tab==="watched"?"":"none";const list=filtered();
   $("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;
@@ -108,7 +108,8 @@ function render(){tabs();if(typeof renderMine==="function")renderMine();if(typeo
   $("#grid").innerHTML=list.length?list.slice(0,page*PER).map(card).join(""):`<div class="empty" style="grid-column:1/-1"><b>Nothing here</b><br>Try loosening the filters.</div>`;
   $("#more").style.display=list.length>page*PER?"":"none";
 }
-function onCardClick(e){const rb=e.target.closest(".rate button");if(rb){const id=rb.closest("[data-id]").dataset.id,r=rb.dataset.r;const o=ST[id];if(o.rating===r)delete o.rating;else o.rating=r;o.updatedAt=new Date().toISOString();PEND[id]="watched";savePend();saveST();render();flush();if(user&&o.rating&&tab!=="watched")toast("Rated — moved to bottom");return}
+function onCardClick(e){const rp=e.target.closest("[data-rmpick]");if(rp){const t=BY[rp.dataset.rmpick];if(t&&confirm(`Remove “${t.title}” from the list?\nThis removes your pick for everyone.`))removePick(t.id);return}
+const rb=e.target.closest(".rate button");if(rb){const id=rb.closest("[data-id]").dataset.id,r=rb.dataset.r;const o=ST[id];if(o.rating===r)delete o.rating;else o.rating=r;o.updatedAt=new Date().toISOString();PEND[id]="watched";savePend();saveST();render();flush();if(user&&o.rating&&tab!=="watched")toast("Rated — moved to bottom");return}
 const b=e.target.closest(".st button");if(b){const id=b.closest("[data-id]").dataset.id,s=b.dataset.s;
     if(stOf(id)===s)delete ST[id];else ST[id]={status:s,title:BY[id].title,updatedAt:new Date().toISOString()};
     PEND[id]=ST[id]?ST[id].status:"none";savePend();saveST();render();flush();if(s==="todo"&&ST[id]&&user&&tab!=="watched")toast("Added to top of your list");else if(s==="watched"&&ST[id])toast(`“${BY[id].title}” added to Watched`);return}
@@ -131,7 +132,7 @@ function renderDetail(){const t=BY[detId];if(!t)return;const s=stOf(t.id),STREAM
   $("#detBody").innerHTML=`<div class="dg" data-id="${t.id}"><div class="dp" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}</div>
   <div class="di"><h2 style="margin:0 0 4px">${esc(t.title)}</h2><div class="s">${meta}</div><div class="s" style="margin:6px 0">${esc(t.genres.join(" · "))}</div>${scores(t)}
   ${x&&x.director&&x.director.length?`<p class="s"><b>Director:</b> ${esc(x.director.join(", "))}</p>`:""}${x&&x.cast&&x.cast.length?`<p class="s"><b>Cast:</b> ${esc(x.cast.join(", "))}</p>`:""}
-  ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}<p class="dd">${esc(t.desc||"No description available.")}</p>${ctl}
+  ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${own(t)?`<button class="link rmp" data-rmpick="${t.id}">Remove my pick</button>`:""}<p class="dd">${esc(t.desc||"No description available.")}</p>${ctl}
   <div class="row" style="margin-top:12px"><a class="btn" href="https://www.imdb.com/title/${t.id}/" target="_blank" rel="noopener">IMDb page ↗</a>${x&&x.trailer?`<button class="btn acc" id="trBtn" type="button">▶ Trailer</button>`:`<a class="btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(t.title+" "+(t.year||"")+" official trailer")}" target="_blank" rel="noopener">▶ Trailer (YouTube search)</a>`}${x&&x.jw?`<a class="btn" href="${esc(x.jw)}" target="_blank" rel="noopener">JustWatch ↗</a>`:""}</div></div></div>
   <h3>Where to watch</h3>${sv}<p class="hint jwa">Streaming data provided by <a href="https://www.justwatch.com" target="_blank" rel="noopener"><b>JustWatch</b></a>${x&&x.u?` · updated ${esc(x.u)}`:""}</p>`}
 function openTrailer(tr,title){const p=$("#mini");p.querySelector(".mv").innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(tr.id)}?autoplay=1&rel=0&modestbranding=1&playsinline=1" title="${esc(title)} trailer" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
@@ -223,8 +224,20 @@ if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(
   window.addEventListener("online",flush)}
 authUI();
 // ---- user-added titles ----
-function toastOpen(m,id){const t=$("#toast");t.innerHTML=`${esc(m)} <button class="link tl" data-open="${esc(id)}">Open</button>`;t.classList.add("show","click");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show","click"),6000)}
-$("#toast").addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o){$("#toast").classList.remove("show","click");openDetail(o.dataset.open)}});
+function toastOpen(m,id,undo){const t=$("#toast");t.innerHTML=`${esc(m)} ${undo?`<button class="link tl" data-undo="${esc(id)}">Undo</button>`:`<button class="link tl" data-open="${esc(id)}">Open</button>`}`;t.classList.add("show","click");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show","click"),6000)}
+$("#toast").addEventListener("click",e=>{const o=e.target.closest("[data-open]"),u=e.target.closest("[data-undo]");if(o){$("#toast").classList.remove("show","click");openDetail(o.dataset.open)}
+  if(u){$("#toast").classList.remove("show","click");const g=REMOVED[u.dataset.undo]||{};const p={k:++pk,query:g.title||u.dataset.undo,year:g.year,id:u.dataset.undo,language:g.language,state:"pending",step:0};PENDING.unshift(p);renderMine();submitAdd(p)}});
+const REMOVED={};
+function own(t){return !!(typeof user!=="undefined"&&user&&t.addedBy&&t.addedBy===user.id)}
+function removeLocal(id){const i=T.findIndex(t=>t.id===id);if(i>=0)T.splice(i,1);delete BY[id];delete SCACHE[id];if(detId===id)$("#det").close();render()}
+let FNV=null;var callFn=b=>sb.functions.invoke("add-title",{body:b});
+async function fnVersion(){if(FNV!==null)return FNV;try{const{data,error}=await callFn({action:"ping"});
+  if(data&&data.version)FNV=data.version;else{const st=error&&error.context&&error.context.status;FNV=(!st||st===404)?0:1}}catch(_){FNV=0}return FNV}
+async function removePick(id){const t=BY[id];if(!t)return;
+  if(await fnVersion()<2)return toast("Removing needs the updated add-title function (not deployed yet).");
+  const{data,error}=await callFn({action:"remove",id});let d=data;if(error){try{d=await error.context.json()}catch(_){d=null}}
+  if(d&&d.status==="removed"){REMOVED[id]={title:t.title,year:t.year,language:t.language};removeLocal(id);toastOpen(`Removed “${t.title}”`,id,true)}
+  else toast((d&&d.message)||"Couldn't remove this title.")}
 function dispName(){if(!user)return"";const m=user.user_metadata||{};return(m.display_name||m.full_name||m.name||(user.email||"").split("@")[0]||"Someone").trim()}
 function mergeUT(row){const r=Object.assign({},row.record);if(!r||!r.id)return;r.source=r.source||`${row.display_name||"Someone"}'s pick`;r.addedBy=row.added_by;r.addedAt=row.created_at;
   if(r.stream){SCACHE[r.id]=r.stream;delete r.stream}
@@ -233,12 +246,12 @@ function mergeUT(row){const r=Object.assign({},row.record);if(!r||!r.id)return;r
   prep(r);T.push(r);BY[r.id]=r;
   if(![...$("#lang").options].some(o=>o.value===r.language))$("#lang").insertAdjacentHTML("beforeend",`<option>${esc(r.language)}</option>`);
   if(r.year&&r.year>+$("#y2").value&&+$("#y2").value===YMAX){$("#y2").max=$("#y2").value=r.year}}
-async function loadUserTitles(){if(!sb)return;try{const{data,error}=await sb.from("user_titles").select("id,record,display_name,added_by,created_at").order("created_at",{ascending:true});if(error)return;data.forEach(mergeUT);render()}catch(_){}}
+async function loadUserTitles(){if(!sb)return;try{const{data,error}=await sb.from("user_titles").select("id,record,display_name,added_by,created_at").order("created_at",{ascending:true});if(error)return;const live=new Set(data.map(r=>r.id));T.filter(t=>t.userPick&&!live.has(t.id)).map(t=>t.id).forEach(removeLocal);data.forEach(mergeUT);render()}catch(_){}}
 var PENDING=[],pk=0;
 var STEPS=["Finding the movie…","Matching it on IMDb…","Getting ratings…","Checking where to stream…","Fetching the trailer…","Almost there…"];
 function renderMine(){const box=$("#mine");if(!box)return;
   const mine=[];
-  if(!user||(!PENDING.length&&!mine.length)){box.hidden=true;return}box.hidden=false;
+  if(!user||(!PENDING.length&&!mine.length)){box.hidden=true;$("#mineGrid").innerHTML="";return}box.hidden=false;
   $("#mineGrid").innerHTML=PENDING.map(p=>`<article class="card pcard ${p.state}" data-pk="${p.k}"><div class="poster ${p.state==="pending"?"skel":""}"><div class="ph">${p.state==="pending"?"":p.state==="exists"?"✓":"⚠️"}</div></div><div class="body"><div class="t">${esc(p.query)}${p.year?` <span class="s">(${p.year})</span>`:""}</div>
     ${p.state==="pending"?`<div class="s rot">${STEPS[p.step%STEPS.length]}</div>`:p.state==="exists"?`<div class="s">Already in the list</div><button class="btn" data-open="${esc(p.id)}">Open “${esc(p.title||p.query)}”</button><button class="link" data-rm="${p.k}">Dismiss</button>`
     :`<div class="err">${esc(p.msg)}</div><div class="row" style="gap:6px"><button class="btn" data-retry="${p.k}">Retry</button><button class="btn" data-rm="${p.k}">Remove</button></div>`}</div></article>`).join("")+mine.map(card).join("")}
@@ -249,7 +262,8 @@ $("#mineGrid").addEventListener("click",e=>{const o=e.target.closest("[data-open
   if(t){const p=PENDING.find(p=>p.k==t.dataset.retry);if(p){p.state="pending";p.step=0;renderMine();submitAdd(p)}return}
   onCardClick(e)});
 async function submitAdd(p){
-  try{const{data,error}=await sb.functions.invoke("add-title",{body:{query:p.query,year:p.year||undefined,type:p.type||undefined,language:p.language||undefined,display_name:dispName()}});
+  try{const body=p.id?{action:"add",id:p.id,language:p.language||undefined,display_name:dispName()}:{query:p.query,year:p.year||undefined,type:p.type||undefined,language:p.language||undefined,display_name:dispName()};
+  const{data,error}=await callFn(body);
     let d=data;
     if(error){d=null;try{d=await error.context.json()}catch(_){}
       if(!d||!d.status){const st=error.context&&error.context.status;p.state="error";p.msg=(!st||st===404)?"Adding titles isn't switched on yet (the add-title function isn't deployed).":"Something went wrong ("+st+"). Please retry.";renderMine();return}}
@@ -265,15 +279,30 @@ function addMatches(){const q=$("#addQ").value.trim(),y=+$("#addY").value||0,n=n
   const rest=hits.filter(t=>t!==exact).slice(0,5);
   box.innerHTML=(exact?`<div class="msg show good" style="display:block">✓ <b>Already in the list:</b> <button class="link" data-open="${exact.id}">${esc(exact.title)} (${exact.year||"—"})</button></div>`:"")+
     (rest.length?`<div class="hint">Similar titles in the list:</div>`+rest.map(t=>`<button class="chip" data-open="${t.id}">${esc(t.title)} ${t.year?`(${t.year})`:""}</button>`).join(" "):"");
-  $("#addGo").disabled=!!exact}
+  $("#addGo").disabled=false}
 var norm=s=>(s||"").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");
-function openAdd(){if(!user)return openAuth(false);$("#addF").reset();$("#addM").innerHTML="";$("#addGo").disabled=true;$("#addDlg").showModal();$("#addQ").focus()}
+function openAdd(){if(!user)return openAuth(false);showForm();$("#addF").reset();$("#addM").innerHTML="";$("#addGo").disabled=true;$("#addDlg").showModal();$("#addQ").focus()}
 ["addQ","addY","addType"].forEach(id=>$("#"+id).addEventListener("input",addMatches));
 $("#addM").addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o){$("#addDlg").close();openDetail(o.dataset.open)}});
 $("#addX").onclick=()=>$("#addDlg").close();
-$("#addF").onsubmit=e=>{e.preventDefault();const q=$("#addQ").value.trim();if(!q||$("#addGo").disabled)return;
-  const p={k:++pk,query:q,year:+$("#addY").value||null,type:$("#addType").value,language:$("#addLang").value.trim(),state:"pending",step:0};
-  PENDING.unshift(p);$("#addDlg").close();renderMine();$("#mine").scrollIntoView({behavior:"smooth",block:"start"});submitAdd(p)};
+function startAdd(p){PENDING.unshift(p);$("#addDlg").close();renderMine();$("#mine").scrollIntoView({behavior:"smooth",block:"start"});submitAdd(p)}
+const addVals=()=>({query:$("#addQ").value.trim(),year:+$("#addY").value||null,type:$("#addType").value,language:$("#addLang").value.trim()});
+function showForm(){$("#addF").hidden=false;$("#addC").hidden=true}
+$("#addF").onsubmit=async e=>{e.preventDefault();const v=addVals();if(!v.query)return;
+  const go=$("#addGo");go.disabled=true;go.textContent="Searching…";
+  const ver=await fnVersion();
+  if(ver<2){go.disabled=false;go.textContent="Search";return startAdd({k:++pk,...v,state:"pending",step:0})}
+  let d=null;try{const r=await callFn({action:"search",query:v.query,year:v.year||undefined,type:v.type||undefined});d=r.data;if(r.error){try{d=await r.error.context.json()}catch(_){}}}catch(_){}
+  go.disabled=false;go.textContent="Search";
+  const c=$("#addC");$("#addF").hidden=true;c.hidden=false;
+  const foot=`<div class="row" style="margin-top:12px;justify-content:space-between"><button class="btn" id="addAgain" type="button">← Search again</button><button class="btn" id="addNone" type="button">None of these — cancel</button></div>`;
+  if(!d||d.status!=="candidates"){c.innerHTML=`<div class="msg show bad">${esc((d&&d.message)||"Search failed. Please try again.")}</div>`+foot}
+  else c.innerHTML=`<p class="hint">Is it one of these?</p>`+d.candidates.map(x=>{const inList=BY[x.id];return `<div class="cand"><div class="cp" ${x.poster?`style="background-image:url('${esc(x.poster)}')"`:""}></div><div class="ci"><b>${esc(x.title)}</b><div class="s">${x.year||"—"} · ${x.type==="series"?"Series":"Movie"}${v.language?" · "+esc(v.language):""}</div>${x.cast?`<div class="s">${esc(x.cast)}</div>`:""}
+    ${x.exists||inList?`<div class="s" style="color:var(--ok);font-weight:600;margin-top:4px">✓ Already in the list</div>${inList?`<button class="btn" type="button" data-open="${x.id}">Open</button>`:""}`:`<button class="btn acc" type="button" data-add="${x.id}" data-t="${esc(x.title)}" data-y="${x.year||""}">Yes, add this</button>`}</div></div>`}).join("")+foot;
+  $("#addAgain").onclick=showForm;$("#addNone").onclick=()=>$("#addDlg").close()};
+$("#addC").addEventListener("click",e=>{const a=e.target.closest("[data-add]"),o=e.target.closest("[data-open]");
+  if(o){$("#addDlg").close();openDetail(o.dataset.open);return}
+  if(a){const v=addVals();startAdd({k:++pk,query:a.dataset.t,year:+a.dataset.y||null,id:a.dataset.add,language:v.language,state:"pending",step:0})}});
 loadUserTitles();
 $("#exp").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({exported:new Date().toISOString(),items:ST},null,1)],{type:"application/json"}));a.download="watchlist-status.json";a.click()};
 $("#impB").onclick=()=>$("#imp").click();

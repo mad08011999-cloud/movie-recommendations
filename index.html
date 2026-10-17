@@ -60,6 +60,8 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 .skel{background:linear-gradient(100deg,var(--line) 30%,var(--card) 50%,var(--line) 70%);background-size:300% 100%;animation:sh 1.3s linear infinite}@keyframes sh{0%{background-position:100% 0}100%{background-position:0 0}}
 .pcard .rot{color:var(--acc);font-weight:600}.pcard.error .poster,.pcard.exists .poster{opacity:.6}.pcard .ph{font-size:34px}
 .toast.click{pointer-events:auto}.toast .tl{color:var(--acc);font-weight:700;margin-left:8px}
+.cand{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line)}.cp{width:64px;flex:none;aspect-ratio:2/3;border-radius:8px;background:var(--line) center/cover}.ci{display:flex;flex-direction:column;gap:3px;align-items:flex-start}.ci .btn{margin-top:6px;padding:6px 12px}
+.rmp{font-size:12px;align-self:flex-start;color:var(--soft)}.rmp:hover{color:var(--acc)}#addDlg{max-height:90vh}
 .empty{text-align:center;padding:50px;color:var(--soft);border:1px dashed var(--line);border-radius:14px}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:560px;width:94%}
 dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
@@ -113,7 +115,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 <div class="row"><div class="f"><label for="addY">Year (optional)</label><input id="addY" type="number" min="1880" max="2100" placeholder="2024"></div>
 <div class="f"><label for="addType">Type (optional)</label><select id="addType"><option value="">Any</option><option value="movie">Movie</option><option value="series">Series</option></select></div></div>
 <div class="f" style="margin-top:8px"><label for="addLang">Language (optional)</label><input id="addLang" maxlength="60" placeholder="e.g. Telugu"></div>
-<div id="addM" style="margin:10px 0"></div><button class="btn acc wide" id="addGo" type="submit">Add to the list</button></form></dialog>
+<div id="addM" style="margin:10px 0"></div><button class="btn acc wide" id="addGo" type="submit">Search</button></form><div id="addC" hidden></div></dialog>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script></body></html>
