@@ -9,6 +9,36 @@ JW = "https://apis.justwatch.com/graphql"
 UA = {"Content-Type": "application/json", "User-Agent": "movie-recommendations-sync/1.0 (+github.com/mad08011999-cloud/movie-recommendations)"}
 TMDB_KEY = os.environ.get("TMDB_API_KEY", "").strip()
 DELAY = float(os.environ.get("STREAM_DELAY", "0.6"))
+WIDE = ["DE","ES","IT","NL","SE","NO","DK","FI","IE","BR","MX","AR","JP","KR","SG","MY","PH","ID","TH","NZ","ZA","AE","TR","PL","BE","CH","AT","PT"]
+def big4(tech):
+    t = tech or ""
+    if t in ("netflix", "netflixbasicwithads"): return "netflix"
+    if t in ("amazonprimevideo", "amazonprime", "amazonprimevideowithads", "amazonimdbtv"): return "prime"
+    if t in ("disneyplus", "hotstar", "jiohotstar", "starplus", "disneyplushotstar"): return "disney"
+    if "paramountplus" in t: return "paramount"
+    return None
+def offer_tech(o): return o.get("k") or ((o.get("i") or "").rsplit("/", 1)[-1].split(".")[0])
+def local_big4(rec):
+    return any(big4(offer_tech(o)) and o.get("t") in ("subscription", "ads", "free") for v in (rec.get("c") or {}).values() for o in v)
+WOFF = " ".join(f'{c}:offers(country:{c},platform:WEB){{monetizationType package{{technicalName}}}}' for c in WIDE)
+WQ = ('query($q:String!){popularTitles(country:US,first:8,filter:{searchQuery:$q}){edges{node{objectType content(country:US,language:"en"){title originalReleaseYear externalIds{imdbId}} ' + WOFF + '}}}}')
+def elsewhere(t):
+    """Which of Netflix / Prime Video / Disney+ / Paramount+ carry the title (subscription/ads/free) in the wider country set."""
+    d = post(WQ, {"q": t["title"]})
+    if d.get("errors"): raise RuntimeError(d["errors"][0].get("message"))
+    nodes = [e["node"] for e in d["data"]["popularTitles"]["edges"]]
+    want = "SHOW" if t["type"] == "series" else "MOVIE"
+    n = next((n for n in nodes if (n.get("content") or {}).get("externalIds", {}).get("imdbId") == t["id"]), None) or \
+        next((n for n in nodes if n["objectType"] == want and norm(n["content"]["title"]) == norm(t["title"]) and t.get("year")
+              and abs((n["content"].get("originalReleaseYear") or 0) - t["year"]) <= 1), None)
+    if not n: return None
+    out = {}
+    for c in WIDE:
+        for o in n.get(c) or []:
+            b = big4((o.get("package") or {}).get("technicalName"))
+            if b and o.get("monetizationType") in ("FLATRATE", "ADS", "FREE") and c not in out.setdefault(b, []): out[b].append(c)
+    return {k: v for k, v in out.items() if v}
+
 TYPES = {"FLATRATE": "subscription", "FREE": "free", "ADS": "ads", "RENT": "rent", "BUY": "buy", "CINEMA": "cinema"}
 OFF = " ".join(f'{c}:offers(country:{c},platform:WEB){{monetizationType standardWebURL package{{clearName technicalName icon}}}}' for c in COUNTRIES)
 Q = ('query($q:String!){popularTitles(country:US,first:8,filter:{searchQuery:$q}){edges{node{id objectType ... on Show{totalSeasonCount} '
@@ -29,7 +59,7 @@ def offers(node):
             if k in seen or t == "cinema": continue
             seen.add(k)
             ic = p.get("icon"); ic = "https://images.justwatch.com" + ic.replace("{profile}", "s100").replace("{format}", "webp") if ic else None
-            lst.append({"p": p.get("clearName"), "i": ic, "t": t, "u": o.get("standardWebURL")})
+            lst.append({"p": p.get("clearName"), "i": ic, "t": t, "u": o.get("standardWebURL"), "k": p.get("technicalName")})
         if lst: res[c] = lst
     return res
 
@@ -66,8 +96,27 @@ def tmdb_lookup(t):
         if lst: res[c] = lst
     return {"c": res, "src": "tmdb"}
 
+def elsewhere_only(cat):
+    """Backfill 'els' for titles not on the big 4 in the 6 home countries (ELSEWHERE_ONLY=1)."""
+    n = found = 0
+    for t in cat:
+        f = os.path.join(DIR, t["id"] + ".json")
+        rec = json.load(open(f)) if os.path.exists(f) else {"c": {}}
+        if local_big4(rec):
+            if "els" in rec: rec.pop("els"); rec.pop("elsU", None); json.dump(rec, open(f, "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+            continue
+        if "els" in rec and not os.environ.get("ELSEWHERE_FORCE"): continue
+        try: e = elsewhere(t)
+        except Exception as ex: print("  elsewhere error", t["id"], ex); time.sleep(DELAY); continue
+        rec["els"] = e if e is not None else {}; rec["elsU"] = datetime.date.today().isoformat(); n += 1; found += bool(rec["els"])
+        json.dump(rec, open(f, "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        if n % 50 == 0: print(f"  elsewhere {n} done, {found} found")
+        time.sleep(DELAY)
+    print(f"elsewhere: looked up {n}, found on a big-4 platform elsewhere {found}")
+
 def main():
     cat = json.load(open(CAT)); ids = {t["id"] for t in cat}
+    if os.environ.get("ELSEWHERE_ONLY"): return elsewhere_only(cat)
     os.makedirs(DIR, exist_ok=True); T = {}
     for f in os.listdir(DIR):
         k = f[:-5]
@@ -90,6 +139,11 @@ def main():
         if rec is None:
             if jw_down and not TMDB_KEY: break
             continue
+        if not local_big4(rec):
+            try:
+                time.sleep(DELAY); e = elsewhere(t)
+                rec["els"] = e if e is not None else {}; rec["elsU"] = datetime.date.today().isoformat()
+            except Exception as ex: print("  elsewhere error", t["id"], ex)
         for k in ("trailer", "trailerTried"):
             if k in T.get(t["id"], {}): rec[k] = T[t["id"]][k]
         rec["u"] = datetime.date.today().isoformat(); T[t["id"]] = rec; ok += 1

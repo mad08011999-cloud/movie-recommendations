@@ -1,7 +1,7 @@
 // Supabase Edge Function: add-title
 // POST JSON, Authorization: Bearer <user access token>
 //   { action: "ping" }                                         -> { status:"ok", version:2 }  (no auth needed)
-//   { action: "search", query, year?, type?, language? }      -> { status:"candidates", candidates:[{id,title,year,type,poster,cast,exists}] } (saves nothing)
+//   { action: "search", query, year?, type?, language? }      -> { status:"candidates", candidates:[{id,title,year,type,poster,cast,exists,big4:{home,els}}] } (saves nothing)
 //   { action: "add", id: "tt…", language?, display_name? }    -> { status:"added"|"exists"|"not_found"|"error", ... }
 //   { action: "remove", id: "tt…" }                           -> { status:"removed" } | 403 if not the caller's pick / base catalog
 //   legacy (no action): { query, year?, type?, language? }    -> resolve + add (v1 behaviour)
@@ -87,9 +87,44 @@ export async function wikipedia(article?: string) {
 }
 
 // ---------- JustWatch ----------
+const WIDE = ["DE","ES","IT","NL","SE","NO","DK","FI","IE","BR","MX","AR","JP","KR","SG","MY","PH","ID","TH","NZ","ZA","AE","TR","PL","BE","CH","AT","PT"];
+export function big4(tech?: string): string | null {
+  const t = tech || "";
+  if (["netflix", "netflixbasicwithads"].includes(t)) return "netflix";
+  if (["amazonprimevideo", "amazonprime", "amazonprimevideowithads", "amazonimdbtv"].includes(t)) return "prime";
+  if (["disneyplus", "hotstar", "jiohotstar", "starplus", "disneyplushotstar"].includes(t)) return "disney";
+  if (t.includes("paramountplus")) return "paramount";
+  return null;
+}
+const STREAMY = ["FLATRATE", "ADS", "FREE"];
+function big4Map(node: any, countries: string[]) {
+  const out: Record<string, string[]> = {};
+  for (const c of countries) for (const o of node[c] || []) {
+    const b = big4(o.package?.technicalName);
+    if (b && STREAMY.includes(o.monetizationType)) { out[b] = out[b] || []; if (!out[b].includes(c)) out[b].push(c); }
+  }
+  return out;
+}
+// Light lookup for search hints: big-4 availability at home (6 countries) and elsewhere (wider set). Cached 6h.
+const HINTS = new Map<string, { at: number; v: any }>();
+export async function big4Hint(id: string, title: string, type: string, year?: number) {
+  const hit = HINTS.get(id); if (hit && Date.now() - hit.at < 6 * 3600_000) return hit.v;
+  const all = [...COUNTRIES, ...WIDE];
+  const off = all.map((c) => `${c}:offers(country:${c},platform:WEB){monetizationType package{technicalName}}`).join(" ");
+  const Q = `query($q:String!){popularTitles(country:US,first:6,filter:{searchQuery:$q}){edges{node{objectType content(country:US,language:"en"){title originalReleaseYear externalIds{imdbId}} ${off}}}}}`;
+  const d = await getJSON("https://apis.justwatch.com/graphql", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: Q, variables: { q: title } }) }, 8000);
+  const nodes = (d?.data?.popularTitles?.edges || []).map((e: any) => e.node);
+  const want = type === "series" ? "SHOW" : "MOVIE";
+  const n = nodes.find((n: any) => n.content?.externalIds?.imdbId === id) ||
+    nodes.find((n: any) => n.objectType === want && norm(n.content?.title) === norm(title) && year && Math.abs((n.content?.originalReleaseYear || 0) - year) <= 1);
+  const v = n ? { home: big4Map(n, COUNTRIES), els: big4Map(n, WIDE) } : null;
+  if (d) HINTS.set(id, { at: Date.now(), v });
+  return v;
+}
 const TYPES: Rec = { FLATRATE: "subscription", FREE: "free", ADS: "ads", RENT: "rent", BUY: "buy" };
 export async function justwatch(rec: Rec) {
-  const off = COUNTRIES.map((c) => `${c}:offers(country:${c},platform:WEB){monetizationType standardWebURL package{clearName technicalName icon}}`).join(" ");
+  const off = COUNTRIES.map((c) => `${c}:offers(country:${c},platform:WEB){monetizationType standardWebURL package{clearName technicalName icon}}`).join(" ") + " " +
+    WIDE.map((c) => `${c}:offers(country:${c},platform:WEB){monetizationType package{technicalName}}`).join(" ");
   const Q = `query($q:String!){popularTitles(country:US,first:8,filter:{searchQuery:$q}){edges{node{id objectType ... on Show{totalSeasonCount} content(country:US,language:"en"){title originalReleaseYear fullPath runtime externalIds{imdbId} credits{role name}} ${off}}}}}`;
   const d = await getJSON("https://apis.justwatch.com/graphql", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: Q, variables: { q: rec.title } }) });
   const nodes = (d?.data?.popularTitles?.edges || []).map((e: any) => e.node);
@@ -103,12 +138,14 @@ export async function justwatch(rec: Rec) {
     for (const o of n[k] || []) {
       const t = TYPES[o.monetizationType]; const p = o.package || {};
       if (!t || seen.has(p.technicalName + t)) continue; seen.add(p.technicalName + t);
-      lst.push({ p: p.clearName, t, u: o.standardWebURL, i: p.icon ? "https://images.justwatch.com" + p.icon.replace("{profile}", "s100").replace("{format}", "webp") : null });
+      lst.push({ p: p.clearName, t, u: o.standardWebURL, k: p.technicalName, i: p.icon ? "https://images.justwatch.com" + p.icon.replace("{profile}", "s100").replace("{format}", "webp") : null });
     }
     if (lst.length) c[k] = lst;
   }
   const cr = n.content?.credits || [];
-  return { jw: "https://www.justwatch.com" + n.content.fullPath, runtime: n.content.runtime || null, seasons: n.totalSeasonCount || null,
+  const home = big4Map(n, COUNTRIES);
+  const extra = Object.keys(home).length ? {} : { els: big4Map(n, WIDE), elsU: new Date().toISOString().slice(0, 10) };
+  return { ...extra, jw: "https://www.justwatch.com" + n.content.fullPath, runtime: n.content.runtime || null, seasons: n.totalSeasonCount || null,
     cast: cr.filter((x: any) => x.role === "ACTOR").slice(0, 8).map((x: any) => x.name), director: cr.filter((x: any) => x.role === "DIRECTOR").slice(0, 3).map((x: any) => x.name), c, src: "justwatch" };
 }
 
@@ -246,7 +283,8 @@ async function handle(req: Request) {
     const cat = await catalogIds();
     const { data: rows } = await db.from("user_titles").select("id").in("id", list.map((c) => c.id));
     const ut = new Set((rows || []).map((r: any) => r.id));
-    return json({ status: "candidates", candidates: list.map((c) => ({ ...c, exists: cat.has(c.id) || ut.has(c.id) })) });
+    const hints = await Promise.all(list.map((c) => big4Hint(c.id, c.title, c.type, c.year || undefined).catch(() => null)));
+    return json({ status: "candidates", candidates: list.map((c, i) => ({ ...c, exists: cat.has(c.id) || ut.has(c.id), big4: hints[i] })) });
   }
 
   // ---- add (by chosen id) / legacy (by query) ----
