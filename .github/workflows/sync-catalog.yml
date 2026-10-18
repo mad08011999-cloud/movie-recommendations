@@ -27,11 +27,14 @@ jobs:
       - name: Trailers (new/missing titles, verified via YouTube oEmbed)
         run: python scripts/trailers.py
         continue-on-error: true
+      - name: Poster texture atlases for the 3D store (only new titles are downloaded)
+        run: pip install --quiet pillow && python scripts/atlas.py
+        continue-on-error: true
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add catalog.json features.json streaming/ scripts/
+          git add catalog.json features.json streaming/ scripts/ atlas/
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
           git commit -m "Daily catalog sync from movie-watchlist"
           git push

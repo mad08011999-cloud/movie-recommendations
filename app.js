@@ -14,7 +14,7 @@ document.documentElement.dataset.theme=theme;
 $("#themeBtn").onclick=()=>{const n=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=n;SET("theme",n)};
 // status
 let ST=JSON.parse(LS("status")||"{}");
-let autoPush=()=>{};const saveST=()=>{SET("status",JSON.stringify(ST));if(typeof RECS!=="undefined")RECS=null};
+let autoPush=()=>{};const saveST=()=>{SET("status",JSON.stringify(ST));if(typeof RECS!=="undefined")RECS=null;if(typeof S3!=="undefined"&&S3)S3.refreshRecs()};
 const stOf=id=>ST[id]?.status||"none";
 // filters
 const years=T.map(t=>t.year).filter(Boolean),YMIN=Math.min(...years),YMAX=Math.max(...years);
@@ -103,9 +103,11 @@ function card(t){const s=stOf(t.id);
   ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${own(t)?`<button class="link rmp" data-rmpick="${t.id}">Remove my pick</button>`:""}${t.why?`<div class="why">${t.whyLabel||"Matched"}: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
   <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div>${s==="watched"?`<div class="rate">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}" aria-pressed="${ST[t.id].rating===k}" title="${n}">${e} ${n}</button>`).join("")}</div>`:""}</div></article>`}
 function render(){tabs();if(typeof renderMine==="function")renderMine();if(typeof detId!=="undefined"&&detId)renderDetail();$("#rf").style.display=tab==="watched"?"":"none";
-  const store=VIEW==="store";document.body.classList.toggle("store",store);if(store)requestAnimationFrame(()=>document.documentElement.style.setProperty("--hdr",document.querySelector("header").offsetHeight+"px"));$("#viewBtn").innerHTML=store?"▦ Back to grid view":"📼 Video store view";$("#viewBtn").setAttribute("aria-pressed",store);
-  if(tab==="foryou"){$("#grid").hidden=true;$("#store").hidden=true;$("#more").style.display="none";$("#fy").hidden=false;return renderForYou()}
+  const store=VIEW==="store";if(S3&&(!store||NO3D||tab==="foryou"))S3.hide();document.body.classList.toggle("store",store);if(store)requestAnimationFrame(()=>document.documentElement.style.setProperty("--hdr",document.querySelector("header").offsetHeight+"px"));$("#viewBtn").innerHTML=store?"▦ Back to grid view":"📼 Walk-in video store";$("#viewBtn").setAttribute("aria-pressed",store);
+  if(tab==="foryou"){$("#grid").hidden=true;$("#grid").innerHTML="";$("#store").hidden=true;$("#more").style.display="none";$("#fy").hidden=false;return renderForYou()}
   $("#fy").hidden=true;const list=filtered();
+  if(store&&!NO3D){$("#grid").hidden=true;$("#store").hidden=true;$("#more").style.display="none";$("#info").textContent=`${list.length} titles on the shelves`;
+    ensure3D().then(s=>{if(VIEW!=="store"||tab==="foryou")return;if(s)s.show(filtered());else{NO3D=true;toast("3D isn't available on this device — showing the shelf view instead");render()}});return}
   if(store){$("#grid").hidden=true;$("#more").style.display="none";$("#store").hidden=false;$("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;$("#info").textContent=`${list.length} titles on the shelves`;renderStore(list);if($("#insp").open)renderInspect();return}
   $("#store").hidden=true;$("#grid").hidden=false;
   $("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;
@@ -224,7 +226,7 @@ function authUI(){const b=$("#authBox");
     $("#dnSave").onclick=async()=>{const v=$("#dnIn").value.trim().slice(0,40);if(!v)return toast("Enter a name");const{error}=await sb.auth.updateUser({data:{display_name:v}});toast(error?"Couldn't save name":"Display name saved")};
     $("#acctBtn").onclick=()=>$("#acctMenu").classList.toggle("open");$("#out").onclick=async()=>{await sb.auth.signOut();toast("Signed out")}}
   else{b.innerHTML=`<button class="btn acc" id="in">Sign in</button>`;sync("Saved on this device only");$("#in").onclick=()=>openAuth(false)}}
-if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;RECS=null;authUI();render();if(nu&&changed)setTimeout(load,0);
+if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;RECS=null;if(S3)S3.refreshRecs();authUI();render();if(nu&&changed)setTimeout(load,0);
     if(ev==="PASSWORD_RECOVERY")setTimeout(()=>openAuth(true),0)});
   window.addEventListener("online",flush)}
 authUI();
@@ -353,6 +355,14 @@ function renderInspect(){const t=BY[inspId];if(!t)return;const s=stOf(t.id),x=SC
 $("#inspBody").addEventListener("click",e=>{if(e.target.closest(".st button,.rate button")){onCardClick(e);renderInspect()}else if(e.target.closest(".front")){inspFlip=true;$("#inspBody .box3d").classList.add("flipped");$("#inspFlip").textContent="↻ Front"}});
 $("#insp").addEventListener("click",e=>{if(e.target.id==="insp")$("#insp").close()});
 $("#insp").addEventListener("close",()=>inspId=null);
+
+// ---------- Walk-in 3D store (store3d.js, three.js) ----------
+var S3=null,S3P=null,NO3D=/[?&]no3d=1/.test(location.search);
+function playTrailer(id){openDetail(id);getStream(id).then(x=>{if(detId!==id)return;if(x&&x.trailer)openTrailer(x.trailer,BY[id].title);else toast("No trailer for this one yet — see where to stream below")})}
+async function recsReady(){if(!sb||!user)return null;if(RECS===null&&!recBusy)await loadRecs();while(recBusy)await new Promise(r=>setTimeout(r,200));return RECS_ERR?[]:(RECS||[])}
+var API3={esc,BY,ST:()=>ST,stOf,SCACHE,scores,RT,onCardClick,openDetail,getStream,toast,playTrailer,user:()=>user,recs:recsReady,
+  exit:()=>{VIEW="grid";localStorage.setItem("view","grid");render();window.scrollTo({top:0})}};
+function ensure3D(){if(S3P)return S3P;S3P=import("./store3d.js?v=1").then(m=>m.supported()?(S3=m.mount(API3),window.__S3=S3,S3):null).catch(e=>{console.warn("3D store failed",e);return null});return S3P}
 
 // ---------- For you (Supabase recommend_for_user) ----------
 var RECS=null,RECS_ERR=null,recBusy=false;
