@@ -226,7 +226,7 @@ function authUI(){const b=$("#authBox");
     $("#dnSave").onclick=async()=>{const v=$("#dnIn").value.trim().slice(0,40);if(!v)return toast("Enter a name");const{error}=await sb.auth.updateUser({data:{display_name:v}});toast(error?"Couldn't save name":"Display name saved")};
     $("#acctBtn").onclick=()=>$("#acctMenu").classList.toggle("open");$("#out").onclick=async()=>{await sb.auth.signOut();toast("Signed out")}}
   else{b.innerHTML=`<button class="btn acc" id="in">Sign in</button>`;sync("Saved on this device only");$("#in").onclick=()=>openAuth(false)}}
-if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;RECS=null;if(S3)S3.refreshRecs();authUI();render();if(nu&&changed)setTimeout(load,0);
+if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;RECS=null;if(changed)LISTS=null;if(S3){S3.refreshRecs();S3.authChanged()}authUI();render();if(nu&&changed)setTimeout(load,0);
     if(ev==="PASSWORD_RECOVERY")setTimeout(()=>openAuth(true),0)});
   window.addEventListener("online",flush)}
 authUI();
@@ -332,10 +332,10 @@ function aisles(list){const yr=new Date().getFullYear(),A=[];
 function vhs(t){const s=stOf(t.id);return `<button class="vhs" data-insp="${t.id}" title="${esc(t.title)} (${t.year||"—"})"><span class="case">${t.poster?`<img src="${esc(t.poster)}" alt="" loading="lazy" decoding="async">`:`<span class="nop">${esc(t.title)}</span>`}<span class="spine"></span>${s!=="none"?`<span class="sticker ${s}">${s==="todo"?"RENT":s==="watching"?"OUT":"✓"}</span>`:""}${t.imdbRating?`<span class="price">★${t.imdbRating.toFixed(1)}</span>`:""}</span><span class="vt">${esc(t.title)}</span></button>`}
 function renderStore(list){const A=aisles(list),el=$("#store");
   if(!list.length){el.innerHTML=`<div class="empty"><b>The shelves are empty</b><br>Loosen the filters to restock.</div>`;return}
-  el.innerHTML=`<nav class="aislenav" aria-label="Aisles">${A.map(([k,n])=>`<button data-aisle="${esc(k)}">${esc(n)}</button>`).join("")}</nav>`+
+  el.innerHTML=`<nav class="aislenav" aria-label="Aisles">${NO3D_FORCED?"":`<button data-to3d="1" class="to3d">🕶️ Walk-in 3D store</button>`}${A.map(([k,n])=>`<button data-aisle="${esc(k)}">${esc(n)}</button>`).join("")}</nav>`+
   A.map(([k,n,items])=>{const all=aisleOpen[k];return `<section class="aisle" id="aisle-${esc(k)}"><div class="neon"><span>${esc(n)}</span><small>${items.length}</small></div>
     <div class="shelfwrap"><button class="sh-l" aria-label="Scroll left">‹</button><div class="shelf ${all?"wrapall":""}">${items.slice(0,all?items.length:SHELF_MAX).map(vhs).join("")}${!all&&items.length>SHELF_MAX?`<button class="vhs more" data-more="${esc(k)}"><span class="case"><span class="nop">See all ${items.length} →</span></span></button>`:""}</div><button class="sh-r" aria-label="Scroll right">›</button></div></section>`}).join("")}
-$("#store").addEventListener("click",e=>{const v=e.target.closest("[data-insp]"),m=e.target.closest("[data-more]"),n=e.target.closest("[data-aisle]"),l=e.target.closest(".sh-l,.sh-r");
+$("#store").addEventListener("click",e=>{if(e.target.closest("[data-to3d]")){localStorage.removeItem("store2d");NO3D=false;render();return}const v=e.target.closest("[data-insp]"),m=e.target.closest("[data-more]"),n=e.target.closest("[data-aisle]"),l=e.target.closest(".sh-l,.sh-r");
   if(v){openInspect(v.dataset.insp);return}
   if(m){aisleOpen[m.dataset.more]=true;render();return}
   if(n){const s=document.getElementById("aisle-"+n.dataset.aisle);if(s)s.scrollIntoView({behavior:"smooth",block:"start"});return}
@@ -357,12 +357,30 @@ $("#insp").addEventListener("click",e=>{if(e.target.id==="insp")$("#insp").close
 $("#insp").addEventListener("close",()=>inspId=null);
 
 // ---------- Walk-in 3D store (store3d.js, three.js) ----------
-var S3=null,S3P=null,NO3D=/[?&]no3d=1/.test(location.search);
+var S3=null,S3P=null,NO3D_FORCED=/[?&]no3d=1/.test(location.search),NO3D=NO3D_FORCED||localStorage.getItem("store2d")==="1";
+// named lists (Supabase user_lists + list_items); degrades gracefully until lists.sql has been run
+var LISTS=null,LISTS_OFF=false;
+const listsApi={
+  state:()=>({off:LISTS_OFF,lists:LISTS,signedIn:!!user}),
+  async load(force){if(!sb||!user){LISTS=null;return null}if(LISTS&&!force)return LISTS;
+    try{const{data,error}=await sb.from("user_lists").select("id,name,created_at,list_items(title_id)").order("created_at",{ascending:true});
+      if(error){if(/42P01|PGRST20|relation|schema cache|does not exist|Could not find/i.test((error.code||"")+" "+(error.message||"")))LISTS_OFF=true;else toast("Couldn't load your lists");LISTS=[];return LISTS}
+      LISTS_OFF=false;LISTS=(data||[]).map(l=>({id:l.id,name:l.name,items:new Set((l.list_items||[]).map(i=>i.title_id))}));return LISTS}catch(e){LISTS=[];return LISTS}},
+  async create(name,titleId){const{data,error}=await sb.from("user_lists").insert({name}).select("id,name").single();
+    if(error){toast(error.code==="23505"?"You already have a list with that name":"Couldn't create the list");return null}
+    const l={id:data.id,name:data.name,items:new Set()};(LISTS=LISTS||[]).push(l);if(titleId)await listsApi.toggle(l.id,titleId,true,true);return l},
+  async toggle(listId,titleId,on,quiet){const l=(LISTS||[]).find(x=>x.id===listId);if(!l)return;
+    const r=on?await sb.from("list_items").insert({list_id:listId,title_id:titleId}):await sb.from("list_items").delete().eq("list_id",listId).eq("title_id",titleId);
+    if(r.error&&r.error.code!=="23505"){toast("Couldn't update the list");return}on?l.items.add(titleId):l.items.delete(titleId);if(!quiet)toast(on?`Added to “${l.name}”`:`Removed from “${l.name}”`)}
+};
 function playTrailer(id){openDetail(id);getStream(id).then(x=>{if(detId!==id)return;if(x&&x.trailer)openTrailer(x.trailer,BY[id].title);else toast("No trailer for this one yet — see where to stream below")})}
 async function recsReady(){if(!sb||!user)return null;if(RECS===null&&!recBusy)await loadRecs();while(recBusy)await new Promise(r=>setTimeout(r,200));return RECS_ERR?[]:(RECS||[])}
-var API3={esc,BY,ST:()=>ST,stOf,SCACHE,scores,RT,onCardClick,openDetail,getStream,toast,playTrailer,user:()=>user,recs:recsReady,
+var API3={esc,BY,ST:()=>ST,stOf,SCACHE,scores,RT,onCardClick,openDetail,getStream,toast,playTrailer,user:()=>user,recs:recsReady,SITE,
+  lists:listsApi,openAuth:()=>openAuth(false),signOut:async()=>{await sb.auth.signOut();toast("Signed out")},userName:()=>user?(dispName()||user.email):"",
+  todoCount:()=>T.filter(t=>stOf(t.id)==="todo").length,list:()=>filtered(),
+  to2D:()=>{localStorage.setItem("store2d","1");NO3D=true;render();window.scrollTo({top:0})},
   exit:()=>{VIEW="grid";localStorage.setItem("view","grid");render();window.scrollTo({top:0})}};
-function ensure3D(){if(S3P)return S3P;S3P=import("./store3d.js?v=1").then(m=>m.supported()?(S3=m.mount(API3),window.__S3=S3,S3):null).catch(e=>{console.warn("3D store failed",e);return null});return S3P}
+function ensure3D(){if(S3P)return S3P;S3P=import("./store3d.js?v=2").then(m=>m.supported()?(S3=m.mount(API3),window.__S3=S3,S3):(NO3D_FORCED=true,null)).catch(e=>{console.warn("3D store failed",e);return null});return S3P}
 
 // ---------- For you (Supabase recommend_for_user) ----------
 var RECS=null,RECS_ERR=null,recBusy=false;
@@ -386,4 +404,5 @@ function renderForYou(){const el=$("#fy");$("#info").textContent="Recommendation
 $("#fy").addEventListener("click",onCardClick);
 
 render();
+{const dl=new URLSearchParams(location.search).get("title");if(dl){const go=()=>{if(BY[dl]){openDetail(dl);return true}};if(!go())setTimeout(go,2500)}}
 })();

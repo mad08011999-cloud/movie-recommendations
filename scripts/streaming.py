@@ -107,6 +107,51 @@ def write_features(cat):
         out[t["id"]] = {"d": r.get("director") or [], "c": (r.get("cast") or [])[:8], "home": home, "countries": sorted((r.get("c") or {}).keys()), "els": r.get("els") or {}}
     json.dump(out, open("features.json", "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     print("features.json:", len(out))
+    write_services(cat)
+
+SVC_NAMES = {"netflix": "Netflix", "prime": "Prime Video", "disney": "Disney+", "paramount": "Paramount+", "max": "Max", "hulu": "Hulu", "peacock": "Peacock",
+             "appletv": "Apple TV+", "tubi": "Tubi", "jiohotstar": "JioHotstar", "youtube": "YouTube (free)", "plex": "Plex", "roku": "The Roku Channel"}
+def svc_key(name):
+    """Normalise a JustWatch provider name to one service key (None for add-on channels)."""
+    n = (name or "").lower().strip()
+    if not n or "channel" in n and "roku" not in n: return None
+    for pre, k in (("netflix", "netflix"), ("amazon prime video", "prime"), ("disney plus", "disney"), ("disney+", "disney"), ("paramount", "paramount"),
+                   ("hbo max", "max"), ("hulu", "hulu"), ("peacock", "peacock"), ("tubi", "tubi"), ("plex", "plex"), ("the roku channel", "roku")):
+        if n.startswith(pre): return k
+    if "hotstar" in n: return "jiohotstar"
+    if n in ("max",): return "max"
+    if n in ("apple tv", "apple tv+", "apple tv plus"): return "appletv"
+    if n.startswith("youtube") and "free" in n: return "youtube"
+    return re.sub(r"[^a-z0-9]", "", re.sub(r"\b(with ads|standard|basic|premium|essential)\b", "", n)) or None
+
+def write_services(cat):
+    """services.json: streaming services per country for the 3D store's 'Your services' picker and restock.
+    {"keys":[k...],"svc":{k:{n,i,cnt:{CC:n}}},"alias":{providerName:k},"t":{id:{CC:[keyIndex...]}}}"""
+    svc, alias, per, names = {}, {}, {}, {}
+    for t in cat:
+        f = os.path.join(DIR, t["id"] + ".json")
+        if not os.path.exists(f): continue
+        r = json.load(open(f))
+        for cc, offs in (r.get("c") or {}).items():
+            if cc not in COUNTRIES: continue
+            ks = set()
+            for o in offs:
+                if o.get("t") not in ("subscription", "free", "ads"): continue
+                k = svc_key(o.get("p"))
+                if not k: continue
+                alias[o.get("p")] = k; ks.add(k)
+                s = svc.setdefault(k, {"cnt": {}, "icons": {}})
+                if o.get("i"): s["icons"][o["i"]] = s["icons"].get(o["i"], 0) + 1
+                names.setdefault(k, {}); names[k][o.get("p")] = names[k].get(o.get("p"), 0) + 1
+            for k in ks: svc[k]["cnt"][cc] = svc[k]["cnt"].get(cc, 0) + 1
+            if ks: per.setdefault(t["id"], {})[cc] = sorted(ks)
+    keys = sorted(svc, key=lambda k: -sum(svc[k]["cnt"].values()))
+    ix = {k: i for i, k in enumerate(keys)}
+    out = {"keys": keys, "alias": alias,
+           "svc": {k: {"n": SVC_NAMES.get(k) or min(names[k], key=lambda p: (-names[k][p], len(p))), "i": max(svc[k]["icons"], key=svc[k]["icons"].get) if svc[k]["icons"] else "", "cnt": svc[k]["cnt"]} for k in keys},
+           "t": {i: {cc: [ix[k] for k in v] for cc, v in m.items()} for i, m in per.items()}}
+    json.dump(out, open("services.json", "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    print("services.json:", len(keys), "services,", len(per), "titles")
 
 def elsewhere_only(cat):
     """Backfill 'els' for titles not on the big 4 in the 6 home countries (ELSEWHERE_ONLY=1)."""
