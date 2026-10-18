@@ -226,7 +226,7 @@ function authUI(){const b=$("#authBox");
     $("#dnSave").onclick=async()=>{const v=$("#dnIn").value.trim().slice(0,40);if(!v)return toast("Enter a name");const{error}=await sb.auth.updateUser({data:{display_name:v}});toast(error?"Couldn't save name":"Display name saved")};
     $("#acctBtn").onclick=()=>$("#acctMenu").classList.toggle("open");$("#out").onclick=async()=>{await sb.auth.signOut();toast("Signed out")}}
   else{b.innerHTML=`<button class="btn acc" id="in">Sign in</button>`;sync("Saved on this device only");$("#in").onclick=()=>openAuth(false)}}
-if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;RECS=null;if(changed)LISTS=null;if(S3){S3.refreshRecs();S3.authChanged()}authUI();render();if(nu&&changed)setTimeout(load,0);
+if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;RECS=null;if(changed){LISTS=null;PREFS=undefined;PREFS_OFF=false;if(nu&&prefsApi)prefsApi.load().then(p=>{if(p&&S3)S3.prefsChanged(p)})}if(S3){S3.refreshRecs();S3.authChanged()}authUI();render();if(nu&&changed)setTimeout(load,0);
     if(ev==="PASSWORD_RECOVERY")setTimeout(()=>openAuth(true),0)});
   window.addEventListener("online",flush)}
 authUI();
@@ -358,6 +358,28 @@ $("#insp").addEventListener("close",()=>inspId=null);
 
 // ---------- Walk-in 3D store (store3d.js, three.js) ----------
 var S3=null,S3P=null,NO3D_FORCED=/[?&]no3d=1/.test(location.search),NO3D=NO3D_FORCED||localStorage.getItem("store2d")==="1";
+// 3D store "Your services" prefs: localStorage always, plus Supabase user_prefs when signed in (degrades if the table is missing)
+var PREFS=undefined,PREFS_OFF=false,PREFS_P=null;
+const LOCAL_CFG=()=>{try{return JSON.parse(localStorage.getItem("store3dCfg"))}catch(_){return null}};
+const isTblMissing=e=>/42P01|PGRST20|relation|schema cache|does not exist|Could not find/i.test(((e&&e.code)||"")+" "+((e&&e.message)||""));
+var prefsApi={
+  off:()=>PREFS_OFF,
+  // resolves to {cc,svc,arrange,chosen:true} from the backend, or null (none saved / signed out / table missing)
+  load(force){if(!sb||!user)return Promise.resolve(null);if(PREFS!==undefined&&!force)return Promise.resolve(PREFS);if(PREFS_P&&!force)return PREFS_P;const uid=user.id;
+    PREFS_P=(async()=>{try{const{data,error}=await sb.from("user_prefs").select("services,country,arrange,updated_at").eq("user_id",uid).maybeSingle();
+      if(!user||user.id!==uid)return null;
+      if(error){if(isTblMissing(error))PREFS_OFF=true;else console.warn("prefs load",error);PREFS=null;return null}
+      PREFS_OFF=false;PREFS=data?{cc:data.country,svc:data.services||[],arrange:data.arrange||"popular",chosen:true}:null;
+      if(PREFS)localStorage.setItem("store3dCfg",JSON.stringify(PREFS));
+      else{const l=LOCAL_CFG();if(l&&l.cc){await prefsApi.save(l,true);}} // first sign-in: migrate this device's choices
+      return PREFS}catch(e){console.warn("prefs load",e);PREFS=null;return null}finally{PREFS_P=null}})();return PREFS_P},
+  async save(cfg,quiet){const c={cc:cfg.cc,svc:[...(cfg.svc||[])],arrange:cfg.arrange||"popular",chosen:true};localStorage.setItem("store3dCfg",JSON.stringify(c));
+    if(!sb||!user||PREFS_OFF)return false;
+    try{const{error}=await sb.from("user_prefs").upsert({user_id:user.id,services:c.svc,country:c.cc,arrange:c.arrange,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+      if(error){if(isTblMissing(error))PREFS_OFF=true;else if(!quiet)toast("Couldn't save your services to your account (saved on this device)");return false}
+      PREFS=c;return true}catch(_){return false}}
+};
+if(user)prefsApi.load().then(p=>{if(p&&S3)S3.prefsChanged(p)});
 // named lists (Supabase user_lists + list_items); degrades gracefully until lists.sql has been run
 var LISTS=null,LISTS_OFF=false;
 const listsApi={
@@ -375,12 +397,12 @@ const listsApi={
 };
 function playTrailer(id){openDetail(id);getStream(id).then(x=>{if(detId!==id)return;if(x&&x.trailer)openTrailer(x.trailer,BY[id].title);else toast("No trailer for this one yet — see where to stream below")})}
 async function recsReady(){if(!sb||!user)return null;if(RECS===null&&!recBusy)await loadRecs();while(recBusy)await new Promise(r=>setTimeout(r,200));return RECS_ERR?[]:(RECS||[])}
-var API3={esc,BY,ST:()=>ST,stOf,SCACHE,scores,RT,onCardClick,openDetail,getStream,toast,playTrailer,user:()=>user,recs:recsReady,SITE,
+var API3={prefs:prefsApi,esc,BY,ST:()=>ST,stOf,SCACHE,scores,RT,onCardClick,openDetail,getStream,toast,playTrailer,user:()=>user,recs:recsReady,SITE,
   lists:listsApi,openAuth:()=>openAuth(false),signOut:async()=>{await sb.auth.signOut();toast("Signed out")},userName:()=>user?(dispName()||user.email):"",
   todoCount:()=>T.filter(t=>stOf(t.id)==="todo").length,list:()=>filtered(),
   to2D:()=>{localStorage.setItem("store2d","1");NO3D=true;render();window.scrollTo({top:0})},
   exit:()=>{VIEW="grid";localStorage.setItem("view","grid");render();window.scrollTo({top:0})}};
-function ensure3D(){if(S3P)return S3P;S3P=import("./store3d.js?v=2").then(m=>m.supported()?(S3=m.mount(API3),window.__S3=S3,S3):(NO3D_FORCED=true,null)).catch(e=>{console.warn("3D store failed",e);return null});return S3P}
+function ensure3D(){if(S3P)return S3P;S3P=import("./store3d.js?v=3").then(m=>m.supported()?(S3=m.mount(API3),window.__S3=S3,S3):(NO3D_FORCED=true,null)).catch(e=>{console.warn("3D store failed",e);return null});return S3P}
 
 // ---------- For you (Supabase recommend_for_user) ----------
 var RECS=null,RECS_ERR=null,recBusy=false;

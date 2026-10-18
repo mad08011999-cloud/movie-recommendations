@@ -30,6 +30,11 @@ export function mount(api) {
   const guessCC = () => { const r = (navigator.language || "").split("-")[1]; const m = { UK: "GB" }[r] || r; return CTRY[m] ? m : "US"; };
   let CFG = (() => { try { return JSON.parse(localStorage.getItem("store3dCfg")); } catch (_) { return null; } })() || { cc: guessCC(), svc: JSON.parse(localStorage.getItem("store3dSvc") || "[]"), arrange: "popular" };
   const saveCfg = () => localStorage.setItem("store3dCfg", JSON.stringify(CFG));
+  // "chosen" = the user has restocked at least once (saved on this device, or in user_prefs when signed in) -> don't prompt again
+  let chosen = !!localStorage.getItem("store3dCfg"), decided = false;
+  const cleanCfg = c => ({ cc: CTRY[c.cc] ? c.cc : "US", svc: (c.svc || []).filter(k => typeof k === "string"), arrange: ARR.some(a => a[0] === c.arrange) ? c.arrange : "popular" });
+  CFG = cleanCfg(CFG);
+  const svcSummary = () => { const n = CFG.svc.map(k => svcName(k)); return (n.length ? (n.length > 3 ? n.slice(0, 3).join(", ") + ` +${n.length - 3}` : n.join(", ")) : "all services") + " · " + CTRY[CFG.cc][1]; };
   let draft = null; // modal edits before RESTOCK
 
   // ---------- DOM ----------
@@ -604,13 +609,14 @@ export function mount(api) {
     const head = [...new Set(MINE.concat(draft.svc.filter(k => SERV.svc[k])))], order = head.concat(present.filter(k => !head.includes(k)).sort((a, b) => SERV.svc[b].cnt[cc] - SERV.svc[a].cnt[cc])).slice(0, 24);
     $(".bb-grid", root).innerHTML = order.map(k => { const n = (SERV.svc[k] && SERV.svc[k].cnt[cc]) || 0; return `<button class="bb-s ${draft.svc.includes(k) ? "on" : ""}" data-svc="${k}" aria-pressed="${draft.svc.includes(k)}" title="${esc(svcName(k))} — ${n} titles in ${esc(f[1])}">${logo(k, "bl")}<span>${esc(svcName(k))}</span><small>${n}</small></button>`; }).join("");
     const all = api.list(), n = draft.svc.length ? all.filter(t => (SERV.t[t.id] && SERV.t[t.id][cc] || []).some(i => draft.svc.includes(SERV.keys[i]))).length : all.length;
-    $(".bb-note", root).innerHTML = (draft.svc.length ? `<b>${n}</b> titles on your services in ${esc(f[1])}` : `No services picked — we'll stock all <b>${n}</b> titles`) + ` · arranged by <b>${esc(ARR.find(a => a[0] === draft.arrange)[1])}</b>`;
+    const where = api.user() ? (api.prefs.off() ? "Saved on this device (account sync isn't switched on yet)" : "Saved to your account — we won't ask again") : "Saved on this device — sign in to keep them everywhere";
+    $(".bb-note", root).innerHTML = `<span class="bb-where">${esc(where)}</span><br>` + (draft.svc.length ? `<b>${n}</b> titles on your services in ${esc(f[1])}` : `No services picked — we'll stock all <b>${n}</b> titles`) + ` · arranged by <b>${esc(ARR.find(a => a[0] === draft.arrange)[1])}</b>`;
     root.querySelectorAll("[data-arr]").forEach(b => b.classList.toggle("on", b.dataset.arr === draft.arrange));
   }
   $(".s3cc", root).addEventListener("change", e => { draft.cc = e.target.value; draft.svc = draft.svc.filter(k => (SERV.svc[k] && SERV.svc[k].cnt[draft.cc]) || MINE.includes(k)); drawModal(); });
   function openModal() { if (held) putBack(); closePops(); if (locked()) document.exitPointerLock(); draft = JSON.parse(JSON.stringify(CFG)); drawModal(); $(".bb-arr", root).hidden = true; root.classList.add("modal"); }
   function closeModal() { root.classList.remove("modal"); if (!entered) enter(); }
-  function restock() { CFG = draft; saveCfg(); root.classList.remove("modal"); lastKey = ""; update(lastList); api.toast(`Restocked: ${S.stockNote}`); if (!entered) enter(); }
+  function restock() { CFG = cleanCfg(draft); saveCfg(); chosen = true; api.prefs.save(CFG); root.classList.remove("modal"); lastKey = ""; update(lastList); api.toast(`Restocked: ${S.stockNote}`); if (!entered) enter(); }
 
   // ---------- directory + minimap + badge ----------
   function badge() { const n = api.todoCount(), b = $(".s3badge", root); b.textContent = n > 99 ? "99+" : n; b.hidden = !n; }
@@ -657,17 +663,29 @@ export function mount(api) {
     lastKey = key; build(list, recs);
   }
   S.show = async list => {
-    if (!visible) { visible = true; root.hidden = false; document.body.classList.add("s3on"); resize(); syncFilters(); renderer.setAnimationLoop(frame); if (!entered) openModal(); }
-    await Promise.all([atlasReady, servReady, featReady]); update(list); root.classList.add("ready"); if (root.classList.contains("modal")) drawModal();
+    if (!visible) { visible = true; root.hidden = false; document.body.classList.add("s3on"); resize(); syncFilters(); renderer.setAnimationLoop(frame); }
+    const decide = !entered && !decided; if (decide) decided = true;
+    // signed in: the account's saved services win over this device's (and skip the window if they exist)
+    const pp = decide && api.user() ? api.prefs.load() : null;
+    await Promise.all([atlasReady, servReady, featReady, pp]);
+    if (pp) { const p = await pp; if (p) { CFG = cleanCfg(p); saveCfg(); chosen = true; } }
+    update(list); root.classList.add("ready");
+    if (decide) { if (chosen && !entered) { enter(); api.toast(`Shelves stocked for ${svcSummary()} — change them with the services icon (top right)`); } else if (!entered) openModal(); }
+    else if (root.classList.contains("modal")) drawModal();
     if (api.user() && recs === null) api.recs().then(r => { recs = r || []; lastKey = ""; if (visible) update(lastList); });
   };
   S.hide = () => { if (!visible) return; visible = false; closePops(); if (locked()) document.exitPointerLock(); if (held) putBack(); renderer.setAnimationLoop(null); root.hidden = true; document.body.classList.remove("s3on"); };
   S.refreshRecs = () => { recs = null; };
-  S.authChanged = () => { if (held) renderWatch(); badge(); };
+  S.authChanged = () => { if (held) renderWatch(); badge(); if (root.classList.contains("modal")) drawModal(); };
+  S.prefsChanged = p => { // saved services arrived from the account (e.g. signed in while in the store)
+    const c = cleanCfg(p), same = JSON.stringify(c) === JSON.stringify(CFG); CFG = c; saveCfg(); chosen = true; if (!visible || !decided) return;
+    if (!entered) { if (root.classList.contains("modal")) { root.classList.remove("modal"); lastKey = ""; update(lastList); enter(); api.toast(`Welcome back — shelves stocked for ${svcSummary()}`); } return; }
+    if (!same) { if (held) putBack(); lastKey = ""; update(lastList); api.toast(`Restocked with your saved services: ${svcSummary()}`); }
+  };
   S.debug = {
     cam, scene, renderer, get placements() { return placements; }, get featured() { return featured; }, pickUp: i => pickUp(typeof i === "number" ? placements[i] : i), enter, units: () => units, cfg: () => CFG, get held() { return held; }, cycle, project: v => v.clone().project(cam),
     teleport: k => { const d = dirEntries.find(e => e.key === k); if (d) { tween = null; cam.position.copy(d.stand); const v = new THREE.Vector3().subVectors(d.look, d.stand); yaw = Math.atan2(-v.x, -v.z); pitch = -0.1; } },
-    look: (x, z, y, p) => { tween = null; walkTo = null; cam.position.set(x, EYE, z); yaw = y; pitch = p; }, get walking() { return !!walkTo || !!tween; }, get pos() { return cam.position.clone(); },
+    look: (x, z, y, p) => { tween = null; walkTo = null; cam.position.set(x, EYE, z); yaw = y; pitch = p; }, get chosen() { return chosen; }, get entered() { return entered; }, get walking() { return !!walkTo || !!tween; }, get pos() { return cam.position.clone(); },
   };
   S.showFps = /[?&]fps=1/.test(location.search);
   return S;
