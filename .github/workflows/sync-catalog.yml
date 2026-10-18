@@ -31,7 +31,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add catalog.json streaming/ scripts/
+          git add catalog.json features.json streaming/ scripts/
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
           git commit -m "Daily catalog sync from movie-watchlist"
           git push

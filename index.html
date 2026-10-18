@@ -63,13 +63,54 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 .cand{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line)}.cp{width:64px;flex:none;aspect-ratio:2/3;border-radius:8px;background:var(--line) center/cover}.ci{display:flex;flex-direction:column;gap:3px;align-items:flex-start}.ci .btn{margin-top:6px;padding:6px 12px}
 .rmp{font-size:12px;align-self:flex-start;color:var(--soft)}.rmp:hover{color:var(--acc)}#addDlg{max-height:90vh}
 .els{border-top:1px solid var(--line);padding:10px 0;margin-top:4px}.els .s{margin-top:4px;line-height:1.5}.b4h{color:var(--ink)}
+
+/* ---- video store view ---- */
+body.store{--bg:#14061c;--card:#22102e;--ink:#f3eaff;--soft:#bba7cf;--line:#3b2550;background:#14061c radial-gradient(circle at 20% 0,#3a0d52 0,transparent 45%),repeating-linear-gradient(45deg,#1a0824 0 14px,#170620 14px 28px)}
+body.store header{position:sticky;top:0;z-index:30;background:rgba(20,6,28,.92);backdrop-filter:blur(8px);margin:-24px -18px 0;padding:12px 18px;border-bottom:2px solid #ff3fd2;box-shadow:0 0 18px #ff3fd255}
+body.store h1{font-family:"Impact","Arial Black",sans-serif;letter-spacing:.04em;color:#fff;text-shadow:0 0 6px #ff3fd2,0 0 18px #ff3fd2}
+.viewbtn[aria-pressed=true]{background:#ffd23f;color:#1a0824;border-color:#ffd23f;font-weight:800}
+.aislenav{position:sticky;top:var(--hdr,76px);z-index:20;display:flex;gap:6px;overflow-x:auto;padding:10px 2px;background:linear-gradient(#14061c,#14061cee 70%,transparent);scrollbar-width:thin}
+.aislenav button{flex:none;border:1px solid #6d3c8c;background:#22102e;color:#f3eaff;border-radius:99px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:13px}.aislenav button:hover{border-color:#3fffd2;color:#3fffd2}
+.aisle{margin:26px 0 8px;scroll-margin-top:calc(var(--hdr,76px) + 56px)}
+.neon{display:inline-flex;align-items:baseline;gap:10px;padding:6px 16px;border:2px solid #3fffd2;border-radius:10px;color:#eafffb;font:800 20px/1.2 "Arial Black",Impact,sans-serif;letter-spacing:.06em;text-transform:uppercase;box-shadow:0 0 10px #3fffd2aa,inset 0 0 10px #3fffd255;text-shadow:0 0 8px #3fffd2;transform:perspective(500px) rotateX(8deg)}
+.neon small{font:600 12px Inter,sans-serif;color:#9fe;text-shadow:none}
+.aisle:nth-child(3n) .neon{border-color:#ff3fd2;box-shadow:0 0 10px #ff3fd2aa,inset 0 0 10px #ff3fd255;text-shadow:0 0 8px #ff3fd2}.aisle:nth-child(3n+1) .neon{border-color:#ffd23f;box-shadow:0 0 10px #ffd23faa,inset 0 0 10px #ffd23f44;text-shadow:0 0 8px #ffd23f}
+.shelfwrap{position:relative;margin-top:12px}
+.shelf{display:flex;gap:14px;overflow-x:auto;padding:18px 34px 26px;perspective:900px;scroll-snap-type:x proximity;background:linear-gradient(transparent calc(100% - 22px),#5a3317 calc(100% - 22px),#3b200d calc(100% - 8px),#00000088 100%);scrollbar-width:none}
+.shelf::-webkit-scrollbar{display:none}.shelf.wrapall{flex-wrap:wrap;overflow:visible;background:none}
+.sh-l,.sh-r{position:absolute;top:40%;z-index:3;width:30px;height:60px;border:0;border-radius:8px;background:#000a;color:#fff;font-size:24px;cursor:pointer}.sh-l{left:0}.sh-r{right:0}
+.vhs{flex:none;width:118px;border:0;background:none;padding:0;cursor:pointer;scroll-snap-align:start;color:var(--ink);text-align:left}
+.vhs .case{position:relative;display:block;aspect-ratio:2/3;border-radius:3px 6px 6px 3px;overflow:hidden;background:#2c1838;box-shadow:-6px 6px 12px #000a,inset 0 0 0 1px #ffffff22;transform:rotateY(14deg);transform-origin:left center;transition:transform .25s,box-shadow .25s}
+.vhs:nth-child(even) .case{transform:rotateY(10deg)}
+.vhs:hover .case,.vhs:focus-visible .case{transform:translateY(-10px) rotateY(0) scale(1.06);box-shadow:0 14px 22px #000c,0 0 14px #3fffd277}
+.vhs img{width:100%;height:100%;object-fit:cover;display:block}.vhs .spine{position:absolute;inset:0 auto 0 0;width:9px;background:linear-gradient(90deg,#000a,#0003 60%,transparent)}
+.vhs .case:after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,#ffffff26 0,transparent 35%)}
+.nop{display:grid;place-items:center;height:100%;padding:8px;text-align:center;font-weight:800;font-size:13px;color:#e9d9ff;background:repeating-linear-gradient(135deg,#3a1d4d 0 8px,#2c1838 8px 16px)}
+.vhs .vt{display:block;font-size:11.5px;margin-top:6px;line-height:1.25;max-height:2.5em;overflow:hidden;color:#e9dcff}
+.sticker{position:absolute;top:6px;right:-2px;padding:2px 7px;font:800 10px Inter,sans-serif;border-radius:3px 0 0 3px;transform:rotate(4deg);z-index:2}.sticker.todo{background:#ffd23f;color:#1a0824}.sticker.watching{background:#3fffd2;color:#062}.sticker.watched{background:#2f9e5b;color:#fff}
+.price{position:absolute;bottom:6px;left:12px;background:#ff3fd2;color:#fff;font:800 10px Inter;padding:2px 5px;border-radius:3px;z-index:2}
+.vhs.more .case{transform:none}
+.insp{border:0;background:transparent;max-width:none;width:100%;height:100%;max-height:none;padding:0;color:#f3eaff}.insp::backdrop{background:#0b0310e6}
+#inspBody{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:20px}
+.stage{perspective:1400px}.box3d{position:relative;width:min(320px,74vw);aspect-ratio:2/3;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.2,.8,.2,1);animation:pull .55s cubic-bezier(.2,.8,.2,1)}
+@keyframes pull{from{transform:translateY(40px) rotateY(-35deg) scale(.7);opacity:0}to{transform:none;opacity:1}}
+.box3d.flipped{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;border-radius:6px;overflow:hidden;box-shadow:0 30px 60px #000,0 0 0 1px #ffffff33}
+.face.front img{width:100%;height:100%;object-fit:cover;cursor:pointer}.nop.big{font-size:22px}
+.face.back{transform:rotateY(180deg);background:#f4efe6;color:#1d1426;padding:16px;overflow:auto;display:flex;flex-direction:column;gap:5px}
+.face.back h3{margin:0;font:800 19px "Arial Black",sans-serif}.face.back .s{color:#5a4b66}.bd{font-size:12.5px;line-height:1.45;margin:6px 0}
+.face.back .st{margin-top:auto}.face.back .st button,.face.back .rate button{color:#5a4b66}
+.inspbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+body.store .card{background:#22102e}
+.fysec h3{margin:22px 0 10px}
+@media(max-width:640px){.vhs{width:96px}body.store header{margin:-24px -18px 0}.neon{font-size:16px}}
 .empty{text-align:center;padding:50px;color:var(--soft);border:1px dashed var(--line);border-radius:14px}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:560px;width:94%}
 dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none}.toast.show{opacity:1}
 </style></head><body><div class="wrap">
 <header><div><h1>Poojith's Watchlist<span>.</span></h1><p class="sub">From the <b>Movie Recommendations</b> collection — <b id="cnt"></b></p></div>
-<div class="row"><span id="sync" class="hint" style="margin:0"></span><span id="authBox" class="row" style="gap:6px"></span><button class="btn" id="themeBtn">🌓 Theme</button><button class="btn" id="setBtn">⚙️ Settings</button></div></header>
+<div class="row"><span id="sync" class="hint" style="margin:0"></span><span id="authBox" class="row" style="gap:6px"></span><button class="btn viewbtn" id="viewBtn" aria-pressed="false">📼 Video store view</button><button class="btn" id="themeBtn">🌓 Theme</button><button class="btn" id="setBtn">⚙️ Settings</button></div></header>
 
 <section class="panel ai"><label for="vibe">✨ AI search — describe a gist or vibe</label>
 <div class="row" style="margin-top:6px"><div class="f" style="flex:5"><input id="vibe" placeholder="e.g. feel-good underdog sports story, or a slow-burn heist with a twist"></div><button class="btn acc" id="vibeBtn">Find matches</button><button class="btn" id="vibeClr">Clear</button></div>
@@ -88,7 +129,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 <section id="mine" class="panel" hidden><h3 style="margin:0 0 12px">Your additions</h3><div class="grid" id="mineGrid"></div></section>
 <div class="tabs" id="tabs"></div>
 <div class="meta"><span id="info"></span><select id="rf" style="width:auto;display:none"><option value="all">All ratings</option><option value="love">❤️ Love it!!</option><option value="like">👍 Like</option><option value="dislike">👎 Not for me</option><option value="none">Unrated</option></select><button class="btn" id="reset">Reset filters</button></div>
-<div class="grid" id="grid"></div><div style="text-align:center;margin-top:24px"><button class="btn" id="more">Show more</button></div>
+<div class="grid" id="grid"></div><div id="store" hidden></div><div id="fy" hidden></div><div style="text-align:center;margin-top:24px"><button class="btn" id="more">Show more</button></div>
 </div>
 
 <dialog id="dlg"><h2 style="margin-top:0">Settings &amp; sync</h2>
@@ -117,6 +158,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}dialog .f{margin-bottom:10px}
 <div class="f"><label for="addType">Type (optional)</label><select id="addType"><option value="">Any</option><option value="movie">Movie</option><option value="series">Series</option></select></div></div>
 <div class="f" style="margin-top:8px"><label for="addLang">Language (optional)</label><input id="addLang" maxlength="60" placeholder="e.g. Telugu"></div>
 <div id="addM" style="margin:10px 0"></div><button class="btn acc wide" id="addGo" type="submit">Search</button></form><div id="addC" hidden></div></dialog>
+<dialog id="insp" class="insp" aria-label="Inspect the box"><div id="inspBody"></div></dialog>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script></body></html>

@@ -96,6 +96,18 @@ def tmdb_lookup(t):
         if lst: res[c] = lst
     return {"c": res, "src": "tmdb"}
 
+def write_features(cat):
+    """features.json: per-title directors/cast/streaming summary for the Supabase sync-catalog function (recommendations)."""
+    out = {}
+    for t in cat:
+        f = os.path.join(DIR, t["id"] + ".json")
+        if not os.path.exists(f): continue
+        r = json.load(open(f))
+        home = sorted({b for v in (r.get("c") or {}).values() for o in v if o.get("t") in ("subscription", "ads", "free") and (b := big4(offer_tech(o)))})
+        out[t["id"]] = {"d": r.get("director") or [], "c": (r.get("cast") or [])[:8], "home": home, "countries": sorted((r.get("c") or {}).keys()), "els": r.get("els") or {}}
+    json.dump(out, open("features.json", "w"), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    print("features.json:", len(out))
+
 def elsewhere_only(cat):
     """Backfill 'els' for titles not on the big 4 in the 6 home countries (ELSEWHERE_ONLY=1)."""
     n = found = 0
@@ -116,7 +128,8 @@ def elsewhere_only(cat):
 
 def main():
     cat = json.load(open(CAT)); ids = {t["id"] for t in cat}
-    if os.environ.get("ELSEWHERE_ONLY"): return elsewhere_only(cat)
+    if os.environ.get("FEATURES_ONLY"): return write_features(cat)
+    if os.environ.get("ELSEWHERE_ONLY"): elsewhere_only(cat); return write_features(cat)
     os.makedirs(DIR, exist_ok=True); T = {}
     for f in os.listdir(DIR):
         k = f[:-5]
@@ -154,5 +167,6 @@ def main():
               open(os.path.join(DIR, "_meta.json"), "w"))
     cov = {c: sum(1 for v in T.values() if v.get("c", {}).get(c)) for c in COUNTRIES}
     print(f"done ok={ok} fail={fail}; matched {sum(1 for v in T.values() if v.get('jw'))}/{len(cat)}; coverage {cov}")
+    write_features(cat)
 
 if __name__ == "__main__": main()

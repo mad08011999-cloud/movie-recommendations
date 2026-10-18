@@ -14,7 +14,7 @@ document.documentElement.dataset.theme=theme;
 $("#themeBtn").onclick=()=>{const n=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=n;SET("theme",n)};
 // status
 let ST=JSON.parse(LS("status")||"{}");
-let autoPush=()=>{};const saveST=()=>{SET("status",JSON.stringify(ST))};
+let autoPush=()=>{};const saveST=()=>{SET("status",JSON.stringify(ST));if(typeof RECS!=="undefined")RECS=null};
 const stOf=id=>ST[id]?.status||"none";
 // filters
 const years=T.map(t=>t.year).filter(Boolean),YMIN=Math.min(...years),YMAX=Math.max(...years);
@@ -26,9 +26,9 @@ const selG=new Set();
 $("#genres").innerHTML=GEN.map(g=>`<span class="chip" data-g="${esc(g)}">${esc(g)} <small>${gc[g]}</small></span>`).join("");
 $("#genres").onclick=e=>{const c=e.target.closest(".chip");if(!c)return;const g=c.dataset.g;selG.has(g)?selG.delete(g):selG.add(g);c.classList.toggle("on");page=1;render()};
 $("#y1").min=$("#y2").min=YMIN;$("#y1").max=$("#y2").max=YMAX;$("#y1").value=YMIN;$("#y2").value=YMAX;
-let tab="all",page=1,vibe=null; const PER=48;
+let tab="all",page=1,vibe=null; const PER=48;var VIEW=localStorage.getItem("view")==="store"?"store":"grid";
 const TABS=[["all","All"],["todo","To watch"],["watching","Watching"],["watched","✅ Watched"]];
-function tabs(){$("#tabs").innerHTML=TABS.map(([k,n])=>`<span class="tab ${tab===k?"on":""}" data-t="${k}">${n} (${k==="all"?T.length:T.filter(t=>stOf(t.id)===k).length})</span>`).join("")}
+function tabs(){const TB=(typeof user!=="undefined"&&user)?TABS.concat([["foryou","✨ For you"]]):TABS;if(tab==="foryou"&&TB===TABS)tab="all";$("#tabs").innerHTML=TB.map(([k,n])=>`<span class="tab ${tab===k?"on":""}" data-t="${k}">${n}${k==="foryou"?"":` (${k==="all"?T.length:T.filter(t=>stOf(t.id)===k).length})`}</span>`).join("")}
 $("#tabs").onclick=e=>{const c=e.target.closest(".tab");if(c){tab=c.dataset.t;page=1;render()}};
 ["rf","q","type","lang","y1","y2","sort"].forEach(id=>$("#"+id).addEventListener("input",()=>{page=1;render()}));
 $("#reset").onclick=()=>{$("#q").value="";$("#type").value="all";$("#lang").value="all";$("#y1").value=YMIN;$("#y2").value=YMAX;selG.clear();document.querySelectorAll("#genres .chip").forEach(c=>c.classList.remove("on"));clearVibe();};
@@ -100,9 +100,14 @@ const RT={dislike:["👎","Not for me"],like:["👍","Like"],love:["👍👍","L
 function card(t){const s=stOf(t.id);
   return `<article class="card" data-id="${t.id}"><div class="poster" ${t.poster?`style="background-image:url('${esc(t.poster)}')"`:""}>${t.poster?"":`<div class="ph">${esc(t.title)}</div>`}<span class="badge">${t.type}</span>${s==="watched"&&ST[t.id].rating?`<span class="badge rb">${RT[ST[t.id].rating][0]} ${RT[ST[t.id].rating][1]}</span>`:""}</div>
   <div class="body"><div class="t">${esc(t.title)}</div><div class="s">${t.year||"—"} · ${esc(t.language)} · ${esc(t.genres.join(", "))}</div>${scores(t)}
-  ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${own(t)?`<button class="link rmp" data-rmpick="${t.id}">Remove my pick</button>`:""}${t.why?`<div class="why">Matched: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
+  ${t.source?`<div class="s">📌 ${esc(t.source)}</div>`:""}${own(t)?`<button class="link rmp" data-rmpick="${t.id}">Remove my pick</button>`:""}${t.why?`<div class="why">${t.whyLabel||"Matched"}: ${esc(t.why)}</div>`:""}<div class="d" title="Click to expand">${esc(t.desc)}</div>
   <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}" aria-pressed="${s===k}">${n}</button>`).join("")}</div>${s==="watched"?`<div class="rate">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}" aria-pressed="${ST[t.id].rating===k}" title="${n}">${e} ${n}</button>`).join("")}</div>`:""}</div></article>`}
-function render(){tabs();if(typeof renderMine==="function")renderMine();if(typeof detId!=="undefined"&&detId)renderDetail();$("#rf").style.display=tab==="watched"?"":"none";const list=filtered();
+function render(){tabs();if(typeof renderMine==="function")renderMine();if(typeof detId!=="undefined"&&detId)renderDetail();$("#rf").style.display=tab==="watched"?"":"none";
+  const store=VIEW==="store";document.body.classList.toggle("store",store);if(store)requestAnimationFrame(()=>document.documentElement.style.setProperty("--hdr",document.querySelector("header").offsetHeight+"px"));$("#viewBtn").innerHTML=store?"▦ Back to grid view":"📼 Video store view";$("#viewBtn").setAttribute("aria-pressed",store);
+  if(tab==="foryou"){$("#grid").hidden=true;$("#store").hidden=true;$("#more").style.display="none";$("#fy").hidden=false;return renderForYou()}
+  $("#fy").hidden=true;const list=filtered();
+  if(store){$("#grid").hidden=true;$("#more").style.display="none";$("#store").hidden=false;$("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;$("#info").textContent=`${list.length} titles on the shelves`;renderStore(list);if($("#insp").open)renderInspect();return}
+  $("#store").hidden=true;$("#grid").hidden=false;
   $("#cnt").textContent=`${T.length} titles · ${T.filter(t=>stOf(t.id)==="watched").length} watched`;
   $("#info").textContent=(vibe?`Vibe matches for “${vibe.q}”: `:"")+`${list.length} title${list.length===1?"":"s"}`;
   $("#grid").innerHTML=list.length?list.slice(0,page*PER).map(card).join(""):`<div class="empty" style="grid-column:1/-1"><b>Nothing here</b><br>Try loosening the filters.</div>`;
@@ -219,7 +224,7 @@ function authUI(){const b=$("#authBox");
     $("#dnSave").onclick=async()=>{const v=$("#dnIn").value.trim().slice(0,40);if(!v)return toast("Enter a name");const{error}=await sb.auth.updateUser({data:{display_name:v}});toast(error?"Couldn't save name":"Display name saved")};
     $("#acctBtn").onclick=()=>$("#acctMenu").classList.toggle("open");$("#out").onclick=async()=>{await sb.auth.signOut();toast("Signed out")}}
   else{b.innerHTML=`<button class="btn acc" id="in">Sign in</button>`;sync("Saved on this device only");$("#in").onclick=()=>openAuth(false)}}
-if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;authUI();render();if(nu&&changed)setTimeout(load,0);
+if(sb){sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;const changed=(nu?.id)!==(user?.id);user=nu;RECS=null;authUI();render();if(nu&&changed)setTimeout(load,0);
     if(ev==="PASSWORD_RECOVERY")setTimeout(()=>openAuth(true),0)});
   window.addEventListener("online",flush)}
 authUI();
@@ -310,5 +315,65 @@ loadUserTitles();
 $("#exp").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({exported:new Date().toISOString(),items:ST},null,1)],{type:"application/json"}));a.download="watchlist-status.json";a.click()};
 $("#impB").onclick=()=>$("#imp").click();
 $("#imp").onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());const it=j.items||j;let n=0;Object.entries(it).forEach(([id,v])=>{if(BY[id]&&v&&v.status&&(!ST[id]||(v.updatedAt||"")>(ST[id].updatedAt||""))){ST[id]=v;PEND[id]=v.status;n++}});saveST();savePend();render();flush();toast(`Imported ${n} entries`)}catch(x){toast("Invalid file")}};
+// ---------- Video store view ----------
+$("#viewBtn").onclick=()=>{VIEW=VIEW==="store"?"grid":"store";localStorage.setItem("view",VIEW);if(tab==="foryou")tab="all";render();window.scrollTo({top:0})};
+const SHELF_MAX=40;let aisleOpen={};
+function aisles(list){const yr=new Date().getFullYear(),A=[];
+  const picks=list.filter(t=>t.source&&/pick/i.test(t.source));if(picks.length)A.push(["staff","⭐ Staff Picks",picks]);
+  const nr=list.filter(t=>t.year&&t.year>=yr-2).sort((a,b)=>(b.year||0)-(a.year||0));if(nr.length)A.push(["new","🆕 New Releases",nr]);
+  const rent=list.filter(t=>["todo","watching"].includes(stOf(t.id)));if(rent.length)A.push(["rent","🎟️ Your Rentals",rent]);
+  const gc={};list.forEach(t=>t.genres.forEach(g=>(gc[g]=gc[g]||[]).push(t)));
+  Object.keys(gc).sort((a,b)=>gc[b].length-gc[a].length).forEach(g=>A.push(["g-"+g,g,gc[g]]));
+  const ser=list.filter(t=>t.type==="series");if(ser.length)A.splice(Math.min(A.length,3),0,["tv","📺 TV Box Sets",ser]);
+  const ret=list.filter(t=>stOf(t.id)==="watched");if(ret.length)A.push(["ret","↩️ Returns (watched)",ret]);
+  return A}
+function vhs(t){const s=stOf(t.id);return `<button class="vhs" data-insp="${t.id}" title="${esc(t.title)} (${t.year||"—"})"><span class="case">${t.poster?`<img src="${esc(t.poster)}" alt="" loading="lazy" decoding="async">`:`<span class="nop">${esc(t.title)}</span>`}<span class="spine"></span>${s!=="none"?`<span class="sticker ${s}">${s==="todo"?"RENT":s==="watching"?"OUT":"✓"}</span>`:""}${t.imdbRating?`<span class="price">★${t.imdbRating.toFixed(1)}</span>`:""}</span><span class="vt">${esc(t.title)}</span></button>`}
+function renderStore(list){const A=aisles(list),el=$("#store");
+  if(!list.length){el.innerHTML=`<div class="empty"><b>The shelves are empty</b><br>Loosen the filters to restock.</div>`;return}
+  el.innerHTML=`<nav class="aislenav" aria-label="Aisles">${A.map(([k,n])=>`<button data-aisle="${esc(k)}">${esc(n)}</button>`).join("")}</nav>`+
+  A.map(([k,n,items])=>{const all=aisleOpen[k];return `<section class="aisle" id="aisle-${esc(k)}"><div class="neon"><span>${esc(n)}</span><small>${items.length}</small></div>
+    <div class="shelfwrap"><button class="sh-l" aria-label="Scroll left">‹</button><div class="shelf ${all?"wrapall":""}">${items.slice(0,all?items.length:SHELF_MAX).map(vhs).join("")}${!all&&items.length>SHELF_MAX?`<button class="vhs more" data-more="${esc(k)}"><span class="case"><span class="nop">See all ${items.length} →</span></span></button>`:""}</div><button class="sh-r" aria-label="Scroll right">›</button></div></section>`}).join("")}
+$("#store").addEventListener("click",e=>{const v=e.target.closest("[data-insp]"),m=e.target.closest("[data-more]"),n=e.target.closest("[data-aisle]"),l=e.target.closest(".sh-l,.sh-r");
+  if(v){openInspect(v.dataset.insp);return}
+  if(m){aisleOpen[m.dataset.more]=true;render();return}
+  if(n){const s=document.getElementById("aisle-"+n.dataset.aisle);if(s)s.scrollIntoView({behavior:"smooth",block:"start"});return}
+  if(l){const sh=l.parentElement.querySelector(".shelf");sh.scrollBy({left:(l.classList.contains("sh-l")?-1:1)*sh.clientWidth*0.85,behavior:"smooth"})}});
+let inspId=null,inspFlip=false;
+function openInspect(id){inspId=id;inspFlip=false;renderInspect();$("#insp").showModal();getStream(id).then(()=>{if(inspId===id)renderInspect()})}
+function renderInspect(){const t=BY[inspId];if(!t)return;const s=stOf(t.id),x=SCACHE[t.id]||null;
+  $("#inspBody").innerHTML=`<div class="stage"><div class="box3d ${inspFlip?"flipped":""}" data-id="${t.id}">
+   <div class="face front">${t.poster?`<img src="${esc(t.poster)}" alt="${esc(t.title)} cover">`:`<div class="nop big">${esc(t.title)}</div>`}</div>
+   <div class="face back"><h3>${esc(t.title)}</h3><div class="s">${t.year||"—"} · ${t.type==="series"?"Series":"Movie"} · ${esc(t.language)}${x&&x.runtime?` · ${x.runtime} min`:""}</div><div class="s">${esc(t.genres.join(" · "))}</div>${scores(t)}
+     <p class="bd">${esc((t.desc||"No description on the back of this box.").slice(0,420))}${(t.desc||"").length>420?"…":""}</p>${x&&x.cast&&x.cast.length?`<p class="s"><b>Starring</b> ${esc(x.cast.slice(0,5).join(", "))}</p>`:""}
+     <div class="st">${[["todo","To watch"],["watching","Watching"],["watched","Watched ✓"]].map(([k,n])=>`<button data-s="${k}" class="${s===k?"on":""}">${n}</button>`).join("")}</div>
+     ${s==="watched"?`<div class="rate" style="margin-top:6px">${Object.entries(RT).map(([k,[e,n]])=>`<button data-r="${k}" class="${ST[t.id].rating===k?"on":""}">${e} ${n}</button>`).join("")}</div>`:""}</div></div></div>
+   <div class="inspbar"><button class="btn" id="inspFlip">↻ ${inspFlip?"Front":"Read the back"}</button><button class="btn acc" id="inspMore">▶ Trailer & where to stream</button><button class="btn" id="inspClose">Put it back</button></div>`;
+  $("#inspFlip").onclick=()=>{inspFlip=!inspFlip;$("#inspBody .box3d").classList.toggle("flipped",inspFlip);$("#inspFlip").textContent="↻ "+(inspFlip?"Front":"Read the back")};
+  $("#inspMore").onclick=()=>{const id=inspId;$("#insp").close();openDetail(id)};$("#inspClose").onclick=()=>$("#insp").close()}
+$("#inspBody").addEventListener("click",e=>{if(e.target.closest(".st button,.rate button")){onCardClick(e);renderInspect()}else if(e.target.closest(".front")){inspFlip=true;$("#inspBody .box3d").classList.add("flipped");$("#inspFlip").textContent="↻ Front"}});
+$("#insp").addEventListener("click",e=>{if(e.target.id==="insp")$("#insp").close()});
+$("#insp").addEventListener("close",()=>inspId=null);
+
+// ---------- For you (Supabase recommend_for_user) ----------
+var RECS=null,RECS_ERR=null,recBusy=false;
+async function loadRecs(){if(!sb||!user||recBusy)return;recBusy=true;
+  try{const{data,error}=await sb.rpc("recommend_for_user",{p_limit:150,p_type:null});RECS_ERR=error||null;RECS=error?[]:(data||[])}catch(e){RECS_ERR=e;RECS=[]}
+  recBusy=false;if(tab==="foryou")render()}
+function recCard(r){const t=BY[r.id];if(!t)return"";const why=[r.because_title?`Because you liked ${r.because_title}`:"",...(r.reasons||[])].filter(Boolean).join(" · ");return card(Object.assign({},t,{why,whyLabel:"Why"}))}
+function renderForYou(){const el=$("#fy");$("#info").textContent="Recommendations from your ratings";
+  const nRated=Object.values(ST).filter(v=>v.rating).length;
+  if(!user){el.innerHTML=`<div class="empty"><b>Sign in for recommendations</b></div>`;return}
+  if(RECS===null){el.innerHTML=`<div class="empty"><b>Finding picks for you…</b></div>`;loadRecs();return}
+  if(RECS_ERR){const m=String(RECS_ERR.message||RECS_ERR.code||"");el.innerHTML=`<div class="empty"><b>Recommendations aren't switched on yet</b><br>${/function|schema|exist|PGRST/i.test(m+(RECS_ERR.code||""))?"The recommendation engine hasn't been installed on the server.":"Couldn't load recommendations right now."}</div>`;return}
+  if(!RECS.length||nRated===0){el.innerHTML=`<div class="empty"><b>Rate a few titles to get picks</b><br>Mark titles you've seen as <b>Watched</b>, then tap 👎 Not for me / 👍 Like / 👍👍 Love it!! — your recommendations appear here.</div>`;return}
+  const save=tab;tab="all";const allowed=new Set(filtered().map(t=>t.id));tab=save;
+  const R=RECS.filter(r=>BY[r.id]&&allowed.has(r.id)),used=new Set(),sec=[];
+  const top=R.slice(0,12);top.forEach(r=>used.add(r.id));if(top.length)sec.push(["Top picks for you",top]);
+  const loved=Object.keys(ST).filter(id=>ST[id].rating==="love"&&BY[id]);const groups={};R.forEach(r=>{if(r.because_id&&loved.includes(r.because_id))(groups[r.because_id]=groups[r.because_id]||[]).push(r)});
+  Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).slice(0,3).forEach(([id,rs])=>{const g=rs.filter(r=>!used.has(r.id)).slice(0,8);if(g.length>=3){g.forEach(r=>used.add(r.id));sec.push([`Because you loved ${BY[id].title}`,g])}});
+  [["movie","Movies for you"],["series","Series for you"]].forEach(([ty,n])=>{const g=R.filter(r=>BY[r.id].type===ty&&!used.has(r.id)).slice(0,12);g.forEach(r=>used.add(r.id));if(g.length)sec.push([n,g])});
+  el.innerHTML=sec.length?sec.map(([n,rs])=>`<section class="fysec"><h3>${esc(n)}</h3><div class="grid">${rs.map(recCard).join("")}</div></section>`).join(""):`<div class="empty"><b>No picks match the current filters</b></div>`}
+$("#fy").addEventListener("click",onCardClick);
+
 render();
 })();
